@@ -1,0 +1,232 @@
+
+.app {
+  min-height: 100vh;
+  background: #09090f;
+  color: white;
+  padding: 55px 20px;
+  font-family: Arial, sans-serif;
+}
+
+.container {
+  width: 100%;
+  max-width: 850px;
+  margin: 0 auto;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 35px;
+}
+
+.header h1 {
+  font-size: clamp(36px, 6vw, 58px);
+  color: #a78bfa;
+  margin: 0 0 10px;
+}
+
+.subtitle {
+  color: #aaa;
+  margin-bottom: 20px;
+}
+
+.status {
+  display: inline-block;
+  padding: 10px 18px;
+  border-radius: 25px;
+  font-size: 13px;
+  text-transform: capitalize;
+  background: #252535;
+}
+
+.status.connected {
+  color: #4ade80;
+}
+
+.status.disconnected {
+  color: #f87171;
+}
+
+.status.connecting {
+  color: #fbbf24;
+}
+
+.welcome-card,
+.room-card {
+  background: #181824;
+  border: 1px solid #303044;
+  padding: 30px;
+  border-radius: 20px;
+}
+
+.welcome-card h2,
+.room-card h2 {
+  text-align: center;
+  margin-top: 0;
+}
+
+.field {
+  margin: 25px 0;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 10px;
+  color: #bbb;
+}
+
+input {
+  width: 100%;
+  padding: 14px;
+  border: 1px solid #3b3b50;
+  background: #101019;
+  border-radius: 10px;
+  color: white;
+  font-size: 16px;
+}
+
+input:focus {
+  outline: 2px solid #a78bfa;
+}
+
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.action-card {
+  background: #212132;
+  padding: 25px;
+  border-radius: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.action-card h3 {
+  margin: 0;
+}
+
+.action-card p {
+  color: #aaa;
+  font-size: 14px;
+  line-height: 1.6;
+  flex: 1;
+}
+
+button {
+  border: none;
+  cursor: pointer;
+  padding: 14px 18px;
+  border-radius: 10px;
+  font-weight: bold;
+  background: #8b5cf6;
+  color: white;
+}
+
+button:hover:not(:disabled) {
+  background: #7c3aed;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.room-card {
+  text-align: center;
+}
+
+.role-label {
+  color: #a78bfa;
+  font-size: 14px;
+}
+
+.muted {
+  color: #999;
+  font-size: 14px;
+}
+
+.room-code {
+  font-size: clamp(32px, 7vw, 50px);
+  letter-spacing: 6px;
+  font-weight: bold;
+  color: #a78bfa;
+  margin: 25px 0;
+  overflow-wrap: anywhere;
+}
+
+.copy-btn {
+  background: #35354a;
+}
+
+.participants {
+  margin-top: 35px;
+  text-align: left;
+}
+
+.participants h3 {
+  margin-bottom: 15px;
+}
+
+.participants ul {
+  padding: 0;
+  list-style: none;
+}
+
+.participants li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px;
+  margin-bottom: 10px;
+  background: #252535;
+  border-radius: 10px;
+  gap: 15px;
+}
+
+.member-role {
+  color: #a78bfa;
+  font-size: 13px;
+}
+
+.leave-btn {
+  background: #dc3545;
+  margin-top: 25px;
+}
+
+.leave-btn:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.alert {
+  padding: 15px;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.alert.error {
+  background: #402025;
+  color: #fca5a5;
+}
+
+.alert.notice {
+  background: #203528;
+  color: #86efac;
+}
+
+@media (max-width: 600px) {
+  .app {
+    padding: 30px 15px;
+  }
+
+  .action-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .welcome-card,
+  .room-card {
+    padding: 20px;
+  }
+}
