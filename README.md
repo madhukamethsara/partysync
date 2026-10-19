@@ -40,8 +40,8 @@ For backend overrides, set environment variables in your shell or run
 2. In Render, create a **Blueprint** from this repository using `render.yaml`.
    `FRONTEND_URL` is configured as `https://partysyncs.vercel.app`. The Blueprint installs
    and starts the backend from `server/` and checks `/api/health`.
-3. In Vercel's environment variables, set `VITE_BACKEND_URL` to the Render HTTPS
-   service URL (for example `https://your-api.onrender.com`), without `/api` or
+3. Production builds default to `https://partysync.onrender.com`. To override this,
+   set Vercel's `VITE_BACKEND_URL` to the Render HTTPS service URL, without `/api` or
    `/socket.io`. Redeploy the frontend after setting or changing this value.
 4. Open the Vercel site, create a party, and join it from another browser.
 

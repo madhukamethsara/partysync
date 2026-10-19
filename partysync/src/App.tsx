@@ -24,7 +24,13 @@ type ConnectionStatus =
   | "connected"
   | "disconnected";
 
-const socket = io(import.meta.env.VITE_BACKEND_URL || "http://localhost:3001", {
+const backendUrl = import.meta.env.VITE_BACKEND_URL || (
+  import.meta.env.PROD
+    ? "https://partysync.onrender.com"
+    : "http://localhost:3001"
+);
+
+const socket = io(backendUrl, {
   autoConnect: false,
 });
 
