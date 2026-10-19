@@ -38,7 +38,7 @@ For backend overrides, set environment variables in your shell or run
    and use the Vite preset. Its `vercel.json` sets installation, build, and output.
    Note the production frontend origin (for example `https://your-app.vercel.app`).
 2. In Render, create a **Blueprint** from this repository using `render.yaml`.
-   Set `FRONTEND_URL` to your exact Vercel production origin. The Blueprint installs
+   `FRONTEND_URL` is configured as `https://partysyncs.vercel.app`. The Blueprint installs
    and starts the backend from `server/` and checks `/api/health`.
 3. In Vercel's environment variables, set `VITE_BACKEND_URL` to the Render HTTPS
    service URL (for example `https://your-api.onrender.com`), without `/api` or
