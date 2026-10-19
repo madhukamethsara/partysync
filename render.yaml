@@ -13,4 +13,4 @@ services:
       - key: NODE_VERSION
         value: 24
       - key: FRONTEND_URL
-        value: https://partysyncs.vercel.app
+        value: https://partysync-black.vercel.app

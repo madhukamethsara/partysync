@@ -9,7 +9,7 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const FRONTEND_URL = process.env.FRONTEND_URL || (
   process.env.NODE_ENV === "production"
-    ? "https://partysyncs.vercel.app"
+    ? "https://partysync-black.vercel.app"
     : "http://localhost:5173"
 );
 const allowedOrigins = FRONTEND_URL.split(",").map((origin) =>
