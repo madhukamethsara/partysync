@@ -6,17 +6,20 @@ import { randomBytes } from "node:crypto";
 import { Server } from "socket.io";
 
 const app = express();
-const PORT = 3001;
-const FRONTEND_URL = "http://localhost:5173";
+const PORT = process.env.PORT || 3001;
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+const allowedOrigins = FRONTEND_URL.split(",").map((origin) =>
+  origin.trim().replace(/\/$/, "")
+);
 
-app.use(cors({ origin: FRONTEND_URL }));
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 
 const httpServer = createServer(app);
 
 const io = new Server(httpServer, {
   cors: {
-    origin: FRONTEND_URL,
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
   },
 });
@@ -247,7 +250,7 @@ io.on("connection", (socket) => {
   });
 });
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(
     `PartySync server running on http://localhost:${PORT}`
   );

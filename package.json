@@ -1,5 +1,10 @@
 {
-  "dependencies": {
-    "socket.io-client": "^4.8.4"
+  "name": "partysync-repo",
+  "private": true,
+  "scripts": {
+    "dev:client": "npm --prefix partysync run dev",
+    "dev:server": "npm --prefix server run dev",
+    "build": "npm --prefix partysync run build",
+    "lint": "npm --prefix partysync run lint"
   }
 }
