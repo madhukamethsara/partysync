@@ -2,6 +2,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { io } from "socket.io-client";
 import "./App.css";
+import KaraokePlayer from "./components/KaraokePlayer";
+import { extractYoutubeId } from "./utils/youtube";
 
 type Participant = {
   id: string;
@@ -9,11 +11,14 @@ type Participant = {
   role: "host" | "guest";
 };
 
+
 type Room = {
   code: string;
   hostId: string;
+  videoId: string | null;
   participants: Participant[];
 };
+
 
 type RoomResponse =
   | { success: true; room: Room }
@@ -44,6 +49,7 @@ function App() {
 
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -127,6 +133,53 @@ function App() {
       setLoading(false);
     }
   }
+
+  
+async function handleChangeSong(
+  event: FormEvent<HTMLFormElement>
+) {
+  event.preventDefault();
+
+  if (!isHost) {
+    setError("Only the host can change the song.");
+    return;
+  }
+
+  const videoId = extractYoutubeId(videoUrl);
+
+  if (!videoId) {
+    setError("Please enter a valid YouTube video URL.");
+    return;
+  }
+
+  setLoading(true);
+  setError("");
+  setNotice("");
+
+  try {
+    const response = (await socket
+      .timeout(5000)
+      .emitWithAck("video:change", {
+        videoId,
+      })) as {
+      success: boolean;
+      message?: string;
+    };
+
+    if (!response.success) {
+      setError(response.message || "Could not change song.");
+      return;
+    }
+
+    setVideoUrl("");
+    setNotice("New karaoke song shared!");
+  } catch {
+    setError("Failed to update the song.");
+  } finally {
+    setLoading(false);
+  }
+}
+
 
   async function handleJoin(
     event: FormEvent<HTMLFormElement>
@@ -329,6 +382,32 @@ function App() {
             {notice && (
               <p className="muted" role="status">
                 {notice}
+              </p>
+            )}
+
+            {isHost && (
+              <form className="song-form" onSubmit={handleChangeSong}>
+                <label htmlFor="video-url">YouTube karaoke URL</label>
+                <input
+                  id="video-url"
+                  type="url"
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  value={videoUrl}
+                  onChange={(event) => setVideoUrl(event.target.value)}
+                  disabled={loading}
+                  required
+                />
+                <button type="submit" disabled={loading || status !== "connected" || !videoUrl.trim()}>
+                  {loading ? "Please wait..." : "Share Song"}
+                </button>
+              </form>
+            )}
+
+            {room.videoId ? (
+              <KaraokePlayer videoId={room.videoId} />
+            ) : (
+              <p className="muted">
+                {isHost ? "Share a YouTube karaoke song to get started." : "Waiting for the host to choose a song."}
               </p>
             )}
 
