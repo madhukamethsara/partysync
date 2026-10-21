@@ -1,28 +1,14 @@
 
 import { useEffect, useState, type FormEvent } from "react";
-import { io } from "socket.io-client";
+import { io, type Socket } from "socket.io-client";
+import type {
+  ClientToServerEvents,
+  ServerToClientEvents,
+  Room,
+} from "./shared/protocol";
 import "./App.css";
 import KaraokePlayer from "./components/KaraokePlayer";
 import { extractYoutubeId } from "./utils/youtube";
-
-type Participant = {
-  id: string;
-  name: string;
-  role: "host" | "guest";
-};
-
-
-type Room = {
-  code: string;
-  hostId: string;
-  videoId: string | null;
-  participants: Participant[];
-};
-
-
-type RoomResponse =
-  | { success: true; room: Room }
-  | { success: false; message: string };
 
 type ConnectionStatus =
   | "connecting"
@@ -35,7 +21,7 @@ const backendUrl = import.meta.env.VITE_BACKEND_URL || (
     : "http://localhost:3001"
 );
 
-const socket = io(backendUrl, {
+const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(backendUrl, {
   autoConnect: false,
 });
 
@@ -115,11 +101,11 @@ function App() {
     setNotice("");
 
     try {
-      const response = (await socket
+      const response = await socket
         .timeout(5000)
         .emitWithAck("room:create", {
           name: name.trim(),
-        })) as RoomResponse;
+        });
 
       if (!response.success) {
         setError(response.message);
@@ -157,14 +143,11 @@ async function handleChangeSong(
   setNotice("");
 
   try {
-    const response = (await socket
+    const response = await socket
       .timeout(5000)
       .emitWithAck("video:change", {
         videoId,
-      })) as {
-      success: boolean;
-      message?: string;
-    };
+      });
 
     if (!response.success) {
       setError(response.message || "Could not change song.");
@@ -196,12 +179,12 @@ async function handleChangeSong(
     setNotice("");
 
     try {
-      const response = (await socket
+      const response = await socket
         .timeout(5000)
         .emitWithAck("room:join", {
           name: name.trim(),
           code: joinCode.trim().toUpperCase(),
-        })) as RoomResponse;
+        });
 
       if (!response.success) {
         setError(response.message);
