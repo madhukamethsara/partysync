@@ -128,7 +128,7 @@ test("host polling catches paused seeks and sends heartbeats without flooding st
   player.position = 45;
   now += 500; host.poll(); await setImmediate();
   assert.equal(sent[1].position, 45);
-  now += 2000; host.poll(); await setImmediate();
+  now += 1000; host.poll(); await setImmediate();
   assert.equal(sent.length, 3);
   host.dispose(); host.publish();
   assert.equal(sent.length, 3);
@@ -263,4 +263,31 @@ test("host speed is applied when YouTube makes it available after loading", () =
   f.follower.sync();
   assert.equal(f.player.rate, 1.5);
   assert.deepEqual(f.player.rates, [1.5]);
+});
+
+test("host capture times use the synchronized server clock and omit timestamps until it is ready", async () => {
+  const player = new Player(); player.state = 1;
+  let serverNow: number | null = null;
+  const sent: PlaybackUpdate[] = [];
+  const host = new HostPublisher({
+    player, playback: snapshot(), serverNow: () => serverNow,
+    onPlayback: () => {}, onStatus: () => {},
+    send: async (update) => { sent.push(update); return { success: true, playback: { ...update, updatedAt: 12000 } }; },
+  });
+  host.publish(); await setImmediate();
+  assert.equal("sampledAt" in sent[0], false);
+  serverNow = 13000;
+  host.publish(); await setImmediate();
+  assert.equal(sent[1].sampledAt, 13000);
+});
+
+test("a guest 450 ms behind corrects after two seconds while small jitter is tolerated", () => {
+  const f = guestFixture(); f.follower.start();
+  f.setTime(14000); f.player.position = 23.55;
+  f.follower.sync();
+  assert.equal(f.player.position, 24);
+  assert.equal(f.player.seeks.length, 2);
+  f.setTime(16000); f.player.position = 25.8;
+  f.follower.sync();
+  assert.equal(f.player.seeks.length, 2);
 });

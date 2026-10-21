@@ -53,6 +53,7 @@ socket.timeout(5000).emitWithAck("playback:update", {
   playing: true,
   playbackRate: 1,
   sequence: latestPlayback.sequence + 1,
+  sampledAt: Date.now() + clockOffsetMs, // optional, after clock synchronization
 });
 ```
 
@@ -60,7 +61,8 @@ The server validates membership, host identity, the selected video, a finite
 nonnegative position, boolean playback status, supported speed range, and a
 positive safe-integer sequence exactly one greater than the current revision.
 The room is determined from the socket's membership, never from client-supplied
-room or host identifiers. Extra fields, including client timestamps, are ignored.
+room or host identifiers. The optional `sampledAt` must be a finite nonnegative
+number in estimated server Unix milliseconds. Other extra fields are ignored.
 
 Accepted samples receive a server timestamp and are broadcast to **all** room
 members, including the host, using `playback:updated`. The acknowledgement is
@@ -73,11 +75,16 @@ updates do not change state or broadcast playback. Clients should retain the
 latest revision, serialize updates, and rebuild the next sample after a conflict.
 Do not blindly resend the same sample after an uncertain acknowledgement.
 
-The timestamp anchors the reported position at server acceptance. This version
-does not compensate for the host-to-server travel time. Periodic fresh samples
-and later drift correction improve alignment; exact frame synchronization is
-not guaranteed. A paused position stays fixed; a playing position advances by
-elapsed time multiplied by playback speed.
+The timestamp anchors the stored position at server acceptance. When a host
+provides `sampledAt`, the server projects a playing sample forward by
+`max(0, receivedAt - sampledAt) / 1000 * playbackRate` before storing it. This
+accounts for the host-to-server travel time that otherwise leaves guests behind.
+Only timestamps within two seconds before receipt or 250 ms after receipt are
+used. Small future estimates are clamped to zero age; timestamps outside the
+window fall back to receipt-time sampling. Paused samples never advance.
+Clients without `sampledAt` retain the previous behavior. Clock estimates assume
+roughly symmetric travel, and YouTube seek/buffering latency still applies;
+exact frame synchronization is not guaranteed.
 
 Late joins receive the latest stored snapshot with its original timestamp,
 not a timestamp rewritten at join time. Consumers must project it forward.
@@ -117,9 +124,9 @@ estimate in each batch, and refreshes every 30 seconds or on **Sync now**.
 
 ## Website consumers (milestone 2)
 
-The host observes player state and rate changes immediately. A 500 ms poll
+The host observes player state and rate changes immediately. A 250 ms poll
 detects seeks (including paused seeks) and shares a heartbeat at least every
-two seconds once playback has started. Buffering publishes a non-playing sample
+second once playback has started. Buffering publishes a non-playing sample
 so guest timelines do not keep advancing while the host waits. Updates are
 serialized; changes during an in-flight acknowledgement are coalesced into a
 fresh sample. Sequence conflicts adopt the returned snapshot and subsequent
@@ -128,8 +135,8 @@ polls send fresh samples. A delayed reply after disposal cannot update the room.
 Guests explicitly tap **Join & Start** after the player and clock are ready.
 Guest corrections do not publish host events. Guests estimate the position from
 the server clock and host speed, clamp it to known video duration, follow
-play/pause and supported playback rates, and correct drift over 0.6 seconds when
-playing or 0.15 seconds when paused. Automatic seeks use a 2.5-second cooldown;
+play/pause and supported playback rates, and correct drift over 0.35 seconds when
+playing or 0.1 seconds when paused. Automatic seeks use a 2-second cooldown;
 new host control changes and explicit **Sync now** can bypass it. Buffering
 guests wait for recovery before attempting automatic drift corrections.
 

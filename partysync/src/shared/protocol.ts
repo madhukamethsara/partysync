@@ -24,6 +24,8 @@ export type PlaybackUpdate = {
   playbackRate: number;
   /** Must equal the latest authoritative sequence + 1. */
   sequence: number;
+  /** Optional capture time in estimated server Unix milliseconds. */
+  sampledAt?: number;
 };
 
 export type Room = {

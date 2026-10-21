@@ -1,6 +1,12 @@
 import type { PlaybackResponse, PlaybackState, PlaybackUpdate } from "../shared/protocol.ts";
 import { expectedPosition } from "../utils/playback.ts";
 
+export const SYNC_POLL_MS = 250;
+const HOST_HEARTBEAT_MS = 1000;
+const PLAYING_DRIFT_SECONDS = 0.35;
+const PAUSED_DRIFT_SECONDS = 0.1;
+const SEEK_COOLDOWN_MS = 2000;
+
 /** The synchronous IFrame API object supplied by YouTube's onReady event. */
 export interface SyncPlayer {
   getCurrentTime(): number;
@@ -23,6 +29,7 @@ type HostOptions = {
   onPlayback: (playback: PlaybackState) => void;
   onStatus: (message: string) => void;
   now?: () => number;
+  serverNow?: () => number | null;
 };
 
 /** Coalesce controls into fresh samples and allow only one update in flight. */
@@ -57,7 +64,8 @@ export class HostPublisher {
     const playbackRate = player.getPlaybackRate();
     if (!Number.isFinite(position) || position < 0 || !Number.isFinite(playbackRate)
       || playbackRate < 0.25 || playbackRate > 2) return null;
-    return { position, playbackRate, playing: state === 1, at: (this.options.now ?? Date.now)() };
+    return { position, playbackRate, playing: state === 1, at: (this.options.now ?? Date.now)(),
+      sampledAt: this.options.serverNow?.() ?? undefined };
   }
 
   poll() {
@@ -69,7 +77,8 @@ export class HostPublisher {
       ? previous.position + (previous.playing ? (sample.at - previous.at) / 1000 * previous.playbackRate : 0)
       : sample.position;
     if (!previous || sample.playing !== previous.playing || sample.playbackRate !== previous.playbackRate
-      || Math.abs(sample.position - predicted) > 0.5 || sample.at - this.lastSentAt >= 2000) {
+      || Math.abs(sample.position - predicted) > PLAYING_DRIFT_SECONDS
+      || sample.at - this.lastSentAt >= HOST_HEARTBEAT_MS) {
       this.publish();
     }
     this.lastSample = sample;
@@ -92,6 +101,7 @@ export class HostPublisher {
         const response = await this.options.send({
           videoId: this.videoId, position: sample.position, playing: sample.playing,
           playbackRate: sample.playbackRate, sequence: this.playback.sequence + 1,
+          ...(sample.sampledAt === undefined ? {} : { sampledAt: sample.sampledAt }),
         });
         if (this.disposed) return;
         if (response.playback) {
@@ -174,7 +184,7 @@ export class GuestFollower {
     const previous = this.previousPlayback;
     const hostControlChanged = previous && playback.sequence > previous.sequence && (
       playback.playing !== previous.playing || playback.playbackRate !== previous.playbackRate
-      || Math.abs(expectedPosition(previous, playback.updatedAt) - playback.position) > 0.6
+      || Math.abs(expectedPosition(previous, playback.updatedAt) - playback.position) > PLAYING_DRIFT_SECONDS
     );
     this.previousPlayback = playback;
     const now = (this.options.now ?? Date.now)();
@@ -192,8 +202,8 @@ export class GuestFollower {
       player.setPlaybackRate(playback.playbackRate);
     }
     const drift = Math.abs(player.getCurrentTime() - target);
-    const shouldSeek = force || (drift > (playing ? 0.6 : 0.15) && (
-      hostControlChanged || (state !== 3 && now - this.lastSeekAt >= 2500)
+    const shouldSeek = force || (drift > (playing ? PLAYING_DRIFT_SECONDS : PAUSED_DRIFT_SECONDS) && (
+      hostControlChanged || (state !== 3 && now - this.lastSeekAt >= SEEK_COOLDOWN_MS)
     ));
     if (shouldSeek) {
       player.seekTo(target, true);
