@@ -56,3 +56,22 @@ the backend. `VITE_BACKEND_URL` is public build-time configuration, not a secret
 Rooms are stored in memory. Keep the backend at one instance; restarting or
 redeploying clears rooms. Free Render services can sleep, so the initial
 connection can take longer while the service wakes up.
+
+## Playback foundation
+
+Rooms now include timestamped playback snapshots, host-only playback updates,
+sequence validation, and a clock synchronization endpoint. Shared TypeScript
+event definitions live in `partysync/src/shared/protocol.ts`.
+
+See [the playback protocol](docs/playback-protocol.md) for event payloads,
+late-join timing, and clock offset calculations. Website playback synchronization
+and the YouTube host extension are subsequent milestones.
+
+After installing both apps' dependencies, run these checks from the repository root:
+
+```sh
+npm test
+npm run check:server
+npm run build
+npm run lint
+```
