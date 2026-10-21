@@ -34,8 +34,12 @@ For backend overrides, set environment variables in your shell or run
 
 ## Deploy
 
-1. Import this repository into Vercel. Set **Root Directory** to `partysync`
-   and use the Vite preset. Its `vercel.json` sets installation, build, and output.
+1. Import this repository into Vercel and use the Vite preset. Leave **Root Directory**
+   at the repository root: the root `vercel.json` installs frontend dependencies
+   with `npm ci --prefix partysync --include=dev`, runs `npm run build`, and serves
+   `partysync/dist`. Existing projects with **Root Directory** set to `partysync`
+   are also supported by `partysync/vercel.json`, which installs with
+   `npm ci --include=dev`, runs `npm run build`, and serves `dist`.
    Note the production frontend origin (for example `https://your-app.vercel.app`).
 2. In Render, create a **Blueprint** from this repository using `render.yaml`.
    `FRONTEND_URL` is configured as `https://partysync-black.vercel.app`. The Blueprint installs
@@ -44,6 +48,15 @@ For backend overrides, set environment variables in your shell or run
    set Vercel's `VITE_BACKEND_URL` to the Render HTTPS service URL, without `/api` or
    `/socket.io`. Redeploy the frontend after setting or changing this value.
 4. Open the Vercel site, create a party, and join it from another browser.
+
+If a Vercel build reports `tsc: command not found`, check the project's
+**Settings > Build and Deployment** and use the commands for its root directory
+listed above. Running only `npm ci` at the repository root does not install the
+frontend's dependencies. Keep development dependencies enabled during builds:
+TypeScript and Vite are required to compile the frontend. Redeploy after updating
+the settings. An npm `Unknown env config "cache-dir"` warning is separate from
+this missing compiler error; if you configured `NPM_CONFIG_CACHE_DIR`, remove it
+or replace it with the supported `NPM_CONFIG_CACHE` setting.
 
 For a manual Render Web Service, use root `server`, build `npm ci`, start
 `npm start`, health check `/api/health`, and the environment variables in the
