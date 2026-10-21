@@ -4,8 +4,12 @@ import { expectedPosition } from "../utils/playback.ts";
 export const SYNC_POLL_MS = 250;
 const HOST_HEARTBEAT_MS = 1000;
 const PLAYING_DRIFT_SECONDS = 0.35;
-const PAUSED_DRIFT_SECONDS = 0.1;
-const SEEK_COOLDOWN_MS = 2000;
+const GUEST_DRIFT_SECONDS = 0.75;
+const PAUSED_DRIFT_SECONDS = 0.25;
+const HOST_SEEK_JUMP_SECONDS = 1.5;
+const AUTOMATIC_SEEK_COOLDOWN_MS = 10000;
+const DRIFT_SETTLE_MS = 1500;
+const BUFFER_RECOVERY_MS = 3000;
 
 /** The synchronous IFrame API object supplied by YouTube's onReady event. */
 export interface SyncPlayer {
@@ -142,6 +146,11 @@ export class GuestFollower {
   private lastRateAttemptAt = -Infinity;
   private previousPlayback: PlaybackState | null = null;
   private syncing = false;
+  private buffering = false;
+  private recoveryUntil = 0;
+  private driftSince: number | null = null;
+  private automaticSeekPending = false;
+  private automaticSeekSuspended = false;
 
   constructor(options: GuestOptions) { this.options = options; }
   dispose() { this.disposed = true; this.enabled = false; }
@@ -150,6 +159,9 @@ export class GuestFollower {
     if (this.disposed) return;
     this.enabled = true;
     this.playAttemptAt = null;
+    this.automaticSeekPending = false;
+    this.automaticSeekSuspended = false;
+    this.driftSince = null;
     this.options.onNeedsStart(false);
     this.sync(true);
   }
@@ -182,9 +194,11 @@ export class GuestFollower {
     const { player } = this.options;
     const playback = this.options.getPlayback();
     const previous = this.previousPlayback;
-    const hostControlChanged = previous && playback.sequence > previous.sequence && (
+    const newHostState = previous && playback.sequence > previous.sequence;
+    const hostSeek = newHostState
+      && Math.abs(expectedPosition(previous, playback.updatedAt) - playback.position) > HOST_SEEK_JUMP_SECONDS;
+    const hostControlChanged = newHostState && (
       playback.playing !== previous.playing || playback.playbackRate !== previous.playbackRate
-      || Math.abs(expectedPosition(previous, playback.updatedAt) - playback.position) > PLAYING_DRIFT_SECONDS
     );
     this.previousPlayback = playback;
     const now = (this.options.now ?? Date.now)();
@@ -194,6 +208,20 @@ export class GuestFollower {
     const atEnd = duration > 0 && target >= duration;
     const playing = playback.playing && !atEnd;
 
+    if (state === 3) {
+      this.buffering = true;
+      this.driftSince = null;
+    } else if (this.buffering) {
+      this.buffering = false;
+      this.recoveryUntil = now + BUFFER_RECOVERY_MS;
+      this.driftSince = null;
+    }
+    if (force || hostSeek || hostControlChanged) {
+      this.automaticSeekPending = false;
+      this.automaticSeekSuspended = false;
+      this.driftSince = null;
+    }
+
     const rateSupported = player.getAvailablePlaybackRates().includes(playback.playbackRate);
     if (rateSupported && player.getPlaybackRate() !== playback.playbackRate
       && (this.requestedRate !== playback.playbackRate || now - this.lastRateAttemptAt >= 1500)) {
@@ -202,17 +230,36 @@ export class GuestFollower {
       player.setPlaybackRate(playback.playbackRate);
     }
     const drift = Math.abs(player.getCurrentTime() - target);
-    const shouldSeek = force || (drift > (playing ? PLAYING_DRIFT_SECONDS : PAUSED_DRIFT_SECONDS) && (
-      hostControlChanged || (state !== 3 && now - this.lastSeekAt >= SEEK_COOLDOWN_MS)
-    ));
+    const settled = state !== 3 && now >= this.recoveryUntil;
+    // Seeking itself may cost more playback time than it recovers on a phone.
+    // Assess the result once it settles; stop automatic retries if it did not help.
+    if (this.automaticSeekPending && settled) {
+      this.automaticSeekPending = false;
+      if (drift > GUEST_DRIFT_SECONDS) this.automaticSeekSuspended = true;
+    }
+    if (playing && settled && drift > GUEST_DRIFT_SECONDS && !this.automaticSeekSuspended) {
+      this.driftSince ??= now;
+    } else this.driftSince = null;
+    const automaticSeek = this.driftSince !== null && now - this.driftSince >= DRIFT_SETTLE_MS
+      && now - this.lastSeekAt >= AUTOMATIC_SEEK_COOLDOWN_MS;
+    const controlSeek = (hostSeek || hostControlChanged)
+      && drift > (playing ? PLAYING_DRIFT_SECONDS : PAUSED_DRIFT_SECONDS);
+    const pausedSeek = !playing && state !== 3 && drift > PAUSED_DRIFT_SECONDS
+      && now - this.lastSeekAt >= 2000;
+    const shouldSeek = force || controlSeek || automaticSeek || pausedSeek;
     if (shouldSeek) {
       player.seekTo(target, true);
       this.lastSeekAt = now;
+      this.recoveryUntil = now + BUFFER_RECOVERY_MS;
+      this.driftSince = null;
+      this.automaticSeekPending = automaticSeek;
     }
     if (playing) {
       if (state === 1) {
         this.playAttemptAt = null;
-        this.options.onStatus(rateSupported ? "Following the host." : "Your player does not support the host’s playback speed.");
+        this.options.onStatus(!rateSupported ? "Your player does not support the host’s playback speed."
+          : this.automaticSeekSuspended ? "Playing without repeated jumps. Tap Sync now to realign."
+          : "Following the host.");
       } else if (state === 3) {
         this.playAttemptAt = null;
         this.options.onStatus("Buffering. Playback will catch up automatically.");

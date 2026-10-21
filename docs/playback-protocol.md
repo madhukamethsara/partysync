@@ -135,10 +135,20 @@ polls send fresh samples. A delayed reply after disposal cannot update the room.
 Guests explicitly tap **Join & Start** after the player and clock are ready.
 Guest corrections do not publish host events. Guests estimate the position from
 the server clock and host speed, clamp it to known video duration, follow
-play/pause and supported playback rates, and correct drift over 0.35 seconds when
-playing or 0.1 seconds when paused. Automatic seeks use a 2-second cooldown;
-new host control changes and explicit **Sync now** can bypass it. Buffering
-guests wait for recovery before attempting automatic drift corrections.
+play/pause and supported playback rates, and tolerate drift up to 0.75 seconds
+when playing or 0.25 seconds when paused. Playing drift must persist for 1.5
+seconds before correction, with at least 10 seconds between catch-up seeks and
+a 3-second grace period after seeks or buffering recovery. A new host timeline
+jump over 1.5 seconds is treated as a seek; normal heartbeat jitter no longer
+bypasses the automatic correction safeguards. Play/pause, rate changes, and
+explicit **Sync now** still apply immediately.
+
+If an automatic seek fails to bring playing drift below the tolerance after
+recovery, further automatic catch-up seeks are suspended. This prevents slow
+players entering an endless seek/buffer loop. The guest sees a message suggesting
+**Sync now**; a user retry, host control change, or song change resets this
+suspension. Host control events remain active throughout. This trades a small
+residual offset for continuous playback on devices with slow media seeks.
 
 Blocked autoplay disables following until another user click. Video changes
 create a new player and require another **Join & Start**. Selecting the same

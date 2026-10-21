@@ -195,10 +195,12 @@ test("small drift is tolerated; large drift is corrected with a cooldown and man
   f.player.position = 10; f.follower.sync();
   assert.equal(f.player.seeks.length, 1);
   f.setTime(15000); f.follower.sync();
-  assert.equal(f.player.position, 25);
+  assert.equal(f.player.seeks.length, 1);
+  f.setTime(22000); f.follower.sync();
+  assert.equal(f.player.position, 32);
   assert.equal(f.player.seeks.length, 2);
   f.player.position = 2; f.follower.start();
-  assert.equal(f.player.position, 25);
+  assert.equal(f.player.position, 32);
   assert.equal(f.player.seeks.length, 3);
 });
 
@@ -221,7 +223,11 @@ test("buffering does not trigger seek loops and catches up after recovery", () =
   assert.equal(f.player.seeks.length, 1);
   assert.match(f.status, /Buffering/);
   f.player.state = 1; f.follower.sync();
-  assert.equal(f.player.position, 30);
+  assert.equal(f.player.seeks.length, 1);
+  f.setTime(23000); f.follower.sync();
+  assert.equal(f.player.seeks.length, 1);
+  f.setTime(24500); f.follower.sync();
+  assert.equal(f.player.position, 34.5);
 });
 
 test("autoplay denial and missing clocks require another user gesture; disposal stops playback commands", () => {
@@ -281,13 +287,60 @@ test("host capture times use the synchronized server clock and omit timestamps u
   assert.equal(sent[1].sampledAt, 13000);
 });
 
-test("a guest 450 ms behind corrects after two seconds while small jitter is tolerated", () => {
+test("subsecond guest drift is tolerated without interrupting playback", () => {
   const f = guestFixture(); f.follower.start();
   f.setTime(14000); f.player.position = 23.55;
   f.follower.sync();
-  assert.equal(f.player.position, 24);
-  assert.equal(f.player.seeks.length, 2);
+  assert.equal(f.player.position, 23.55);
+  assert.equal(f.player.seeks.length, 1);
   f.setTime(16000); f.player.position = 25.8;
   f.follower.sync();
-  assert.equal(f.player.seeks.length, 2);
+  assert.equal(f.player.seeks.length, 1);
+});
+
+test("slow phone seeks do not cause an endless cycle of catch-up buffering", () => {
+  const player = new Player();
+  let time = 12000;
+  let recoveringAt = 0;
+  let playback = snapshot();
+  let status = "";
+  player.seekTo = (position) => {
+    player.seeks.push(position); player.position = position;
+    player.state = 3; recoveringAt = time + 900;
+  };
+  player.playVideo = () => { player.plays++; };
+  const follower = new GuestFollower({ player, now: () => time, serverNow: () => time,
+    getPlayback: () => playback, onStatus: (message) => { status = message; }, onNeedsStart: () => {} });
+  follower.start();
+  for (time = 12250; time <= 32000; time += 250) {
+    if (player.state === 3 && time >= recoveringAt) player.state = 1;
+    else if (player.state === 1) player.position += 0.25;
+    if (time % 1000 === 0) playback = snapshot({
+      position: 20 + (time - 10000) / 1000, updatedAt: time, sequence: playback.sequence + 1,
+    });
+    follower.sync();
+  }
+  assert.ok(player.seeks.length <= 2, `Expected at most one automatic retry, got ${player.seeks.length} seeks`);
+  assert.equal(player.state, 1);
+  assert.match(status, /without repeated jumps/);
+  const beforeSeek = player.seeks.length;
+  playback = snapshot({ position: 150, updatedAt: time, sequence: playback.sequence + 1 });
+  follower.sync();
+  assert.equal(player.seeks.length, beforeSeek + 1, "Host seeks still apply immediately after automatic resync is suspended");
+  follower.start();
+  assert.equal(player.seeks.length, beforeSeek + 2, "Manual synchronization still forces a seek");
+});
+
+test("heartbeat timing jitter is not treated as repeated host seeking", () => {
+  const f = guestFixture(); f.follower.start();
+  for (let second = 13; second <= 33; second++) {
+    const time = second * 1000;
+    const position = 20 + second - 10;
+    f.setTime(time); f.player.position = position;
+    f.setPlayback(snapshot({ position: position + (second % 2 ? 0.45 : -0.45),
+      updatedAt: time, sequence: second }));
+    f.follower.sync();
+  }
+  assert.equal(f.player.seeks.length, 1);
+  assert.equal(f.player.state, 1);
 });

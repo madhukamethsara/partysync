@@ -3,6 +3,8 @@ import type { SyncPlayer } from "../src/sync/playback";
 interface TestPlayer extends SyncPlayer {
   videoId: string;
   blockPlayback: boolean;
+  seekLatencyMs: number;
+  seekCount: number;
   error(code: number): void;
   buffer(): void;
 }
@@ -18,6 +20,8 @@ export function installMockYouTube() {
   class MockPlayer {
     videoId: string;
     blockPlayback = false;
+    seekLatencyMs = 0;
+    seekCount = 0;
     private state = 5;
     private position = 0;
     private rate = 1;
@@ -25,6 +29,8 @@ export function installMockYouTube() {
     private iframe: HTMLIFrameElement;
     private events: Record<string, Listener>;
     private listeners = new Map<string, Set<Listener>>();
+    private seekTimer: ReturnType<typeof setTimeout> | null = null;
+    private seekResumeState = 1;
 
     constructor(element: HTMLElement, options: { videoId: string; events: Record<string, Listener> }) {
       this.videoId = options.videoId;
@@ -56,11 +62,25 @@ export function installMockYouTube() {
     getIframe() { return this.iframe; }
     playVideo() {
       if (this.blockPlayback) { this.emit("onAutoplayBlocked", 0); return; }
+      if (this.seekTimer !== null) { this.seekResumeState = 1; return; }
       this.setState(1);
     }
-    pauseVideo() { this.setState(2); }
+    pauseVideo() { this.seekResumeState = 2; this.setState(2); }
     buffer() { this.setState(3); }
     seekTo(position: number) {
+      this.seekCount++;
+      if (this.seekTimer !== null) clearTimeout(this.seekTimer);
+      if (this.seekLatencyMs > 0) {
+        this.seekResumeState = this.state === 2 ? 2 : 1;
+        this.setState(3);
+        this.seekTimer = setTimeout(() => {
+          this.position = position; this.sampledAt = performance.now();
+          this.seekTimer = null;
+          if (this.seekResumeState === 1) this.playVideo();
+          else this.pauseVideo();
+        }, this.seekLatencyMs);
+        return;
+      }
       this.position = position; this.sampledAt = performance.now();
       if (this.state === 5 || this.state === 0) this.playVideo();
     }
@@ -75,7 +95,10 @@ export function installMockYouTube() {
     removeEventListener(event: string, listener: Listener) { this.listeners.get(event)?.delete(listener); }
     setSize() {}
     error(code: number) { this.emit("onError", code); }
-    destroy() { this.listeners.clear(); this.iframe.remove(); }
+    destroy() {
+      if (this.seekTimer !== null) clearTimeout(this.seekTimer);
+      this.listeners.clear(); this.iframe.remove();
+    }
   }
   Object.assign(window, { YT: { Player: MockPlayer } });
 }
