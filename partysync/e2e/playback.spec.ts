@@ -97,3 +97,41 @@ test("blocked playback can be retried, buffering recovers, and unavailable video
     await expect(guest.getByRole("alert")).toContainText("YouTube cannot play this video here.");
   } finally { await context.close(); }
 });
+
+test("400 ms of host uplink delay does not leave a late guest behind", async ({ browser, baseURL }) => {
+  const hostContext = await browser.newContext({ baseURL });
+  const guestContext = await browser.newContext({ baseURL });
+  await hostContext.addInitScript(installMockYouTube);
+  await guestContext.addInitScript(installMockYouTube);
+  await hostContext.addInitScript(() => {
+    const originalSend = WebSocket.prototype.send;
+    window.delayedPlaybackPackets = 0;
+    WebSocket.prototype.send = function (data) {
+      if (typeof data === "string" && data.includes('"playback:update"')) {
+        window.delayedPlaybackPackets++;
+        setTimeout(() => { if (this.readyState === WebSocket.OPEN) originalSend.call(this, data); }, 400);
+      } else originalSend.call(this, data);
+    };
+  });
+  const host = await hostContext.newPage();
+  const guest = await guestContext.newPage();
+  try {
+    const code = await createParty(host);
+    await host.evaluate(() => {
+      window.mockYouTube.seekTo(60, true);
+      window.mockYouTube.setPlaybackRate(1.5);
+      window.mockYouTube.playVideo();
+    });
+    await expect.poll(() => host.evaluate(() => window.delayedPlaybackPackets)).toBeGreaterThan(0);
+    await expect(host.getByText("Host controls are live. Everyone follows your player.")).toBeVisible();
+    await joinParty(guest, code);
+    await guest.getByRole("button", { name: "Join & Start" }).click();
+    await expect.poll(async () => {
+      const [hostTime, guestTime] = await Promise.all([
+        host.evaluate(() => window.mockYouTube.getCurrentTime()),
+        guest.evaluate(() => window.mockYouTube.getCurrentTime()),
+      ]);
+      return Math.abs(hostTime - guestTime);
+    }).toBeLessThan(0.2);
+  } finally { await hostContext.close(); await guestContext.close(); }
+});

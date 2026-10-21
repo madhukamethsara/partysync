@@ -280,8 +280,8 @@ export function createPartySyncServer({ now = Date.now } = {}) {
       callback({ success: true });
     });
 
-    // Anchor accepted host samples to server time. Clients advance playing
-    // snapshots using their estimated server clock, rather than packet arrival.
+    // Project recent timestamped host samples to receipt time to account for
+    // uplink travel. Older clients still anchor their samples at receipt.
     socket.on("playback:update", (data, callback) => {
       if (typeof callback !== "function") return;
 
@@ -300,7 +300,8 @@ export function createPartySyncServer({ now = Date.now } = {}) {
         typeof data.playing !== "boolean" ||
         !Number.isFinite(data.playbackRate) ||
         data.playbackRate < 0.25 || data.playbackRate > 2 ||
-        !Number.isSafeInteger(data.sequence) || data.sequence < 1
+        !Number.isSafeInteger(data.sequence) || data.sequence < 1 ||
+        (data.sampledAt !== undefined && (!Number.isFinite(data.sampledAt) || data.sampledAt < 0))
       ) {
         return callback({ success: false, message: "Invalid playback state." });
       }
@@ -319,12 +320,18 @@ export function createPartySyncServer({ now = Date.now } = {}) {
         });
       }
 
+      const receivedAt = now();
+      // Clock estimates are approximate. Ignore timestamps outside a bounded
+      // window and clamp small future estimates instead of projecting backwards.
+      const sampleAge = data.sampledAt !== undefined
+        && data.sampledAt >= receivedAt - 2000 && data.sampledAt <= receivedAt + 250
+        ? Math.max(0, receivedAt - data.sampledAt) : 0;
       room.playback = {
         videoId: room.videoId,
-        position: data.position,
+        position: data.position + (data.playing ? sampleAge / 1000 * data.playbackRate : 0),
         playing: data.playing,
         playbackRate: data.playbackRate,
-        updatedAt: now(),
+        updatedAt: receivedAt,
         sequence: room.playback.sequence + 1,
       };
       io.to(room.code).emit("playback:updated", room.playback);

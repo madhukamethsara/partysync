@@ -84,13 +84,20 @@ tap **Join & Start** to follow the host's current position, play/pause, seeks,
 and playback speed. **Sync now** forces a position correction and refreshes the
 clock estimate. Guests must tap **Join & Start** again if their browser blocks
 playback or a new song loads. Clock estimates refresh every 30 seconds; host
-positions are shared at least every two seconds while the player is active.
+positions are shared at least every second while the player is active. Host
+samples include their capture time in the synchronized server clock so the
+backend can compensate for host-to-server travel time during playback.
 
-Automatic corrections tolerate 0.6 seconds of playing drift (0.15 when paused)
-and use a 2.5-second seek cooldown to avoid repeated buffering. Host control
+Automatic corrections tolerate 0.35 seconds of playing drift (0.1 when paused)
+and use a 2-second seek cooldown to avoid repeated buffering. Players are checked
+every 250 ms. Host control
 changes and manual synchronization can bypass the cooldown. Playback still
 depends on YouTube availability, ads, buffering, and browser playback permissions;
 frame-exact synchronization is not guaranteed. The host extension is milestone 3.
+
+The delay reduction needs both the frontend and backend deployed from the latest
+code. Older clients remain supported; clients without a synchronized capture
+time use receipt-time playback snapshots.
 
 After installing both apps' dependencies, run these checks from the repository root:
 

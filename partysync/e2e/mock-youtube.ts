@@ -8,7 +8,7 @@ interface TestPlayer extends SyncPlayer {
 }
 
 declare global {
-  interface Window { mockYouTube: TestPlayer }
+  interface Window { mockYouTube: TestPlayer; delayedPlaybackPackets: number }
 }
 
 /** Test only: preserves the IFrame API's event wiring without network or ads. */

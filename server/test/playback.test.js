@@ -128,6 +128,8 @@ test("invalid payloads leave playback unchanged and cannot crash the server", as
     sample({ playbackRate: 2.1 }), sample({ playbackRate: "1" }),
     sample({ sequence: 0 }), sample({ sequence: 1.5 }),
     sample({ sequence: Number.MAX_SAFE_INTEGER + 1 }),
+    sample({ sampledAt: null }), sample({ sampledAt: "1234" }),
+    sample({ sampledAt: -1 }), sample({ sampledAt: Infinity }),
   ];
   for (const data of invalid) {
     assert.equal((await ack(f.host, "playback:update", data)).success, false, JSON.stringify(data));
@@ -192,4 +194,43 @@ test("playback broadcasts stay in their room and rejected updates emit nothing",
   await ack(guest, "playback:update", sample({ sequence: 3 }));
   await ack(guest, "clock:sync", { clientSentAt: 1 });
   assert.deepEqual(guestEvents, [accepted.playback]);
+});
+
+test("timestamped samples compensate host uplink delay and preserve that position for late joins", async (t) => {
+  const f = await fixture(t);
+  await f.select();
+  const sampledAt = 1_800_000_000_000;
+  f.setTime(sampledAt + 400);
+  const result = await ack(f.host, "playback:update", sample({
+    position: 30, playbackRate: 1.5, sampledAt,
+  }));
+  assert.equal(result.success, true);
+  assert.equal(result.playback.position, 30.6);
+  assert.equal(result.playback.updatedAt, sampledAt + 400);
+  f.setTime(sampledAt + 900);
+  const late = await f.join();
+  assert.deepEqual(late.room.playback, result.playback);
+  // At guest receipt the projected position matches 900 ms of host playback.
+  const guestPosition = late.room.playback.position + 0.5 * late.room.playback.playbackRate;
+  assert.equal(guestPosition, 31.35);
+});
+
+test("timestamp compensation is bounded, never rewinds, and never advances paused samples", async (t) => {
+  const f = await fixture(t);
+  await f.select();
+  const receivedAt = 1_800_000_001_000;
+  f.setTime(receivedAt);
+  let sequence = 2;
+  for (const offset of [-10000, -2001, -2000, -400, 0, 100, 250, 251, 10000]) {
+    const result = await ack(f.host, "playback:update", sample({ sequence: sequence++, sampledAt: receivedAt + offset }));
+    assert.equal(result.success, true);
+    const expected = offset >= -2000 && offset < 0 ? 42.5 - offset / 1000 * 1.25 : 42.5;
+    assert.equal(result.playback.position, expected, `offset ${offset}`);
+    assert.equal(result.playback.updatedAt, receivedAt);
+  }
+  const paused = await ack(f.host, "playback:update", sample({
+    sequence, sampledAt: receivedAt - 1000, playing: false,
+  }));
+  assert.equal(paused.success, true);
+  assert.equal(paused.playback.position, 42.5);
 });

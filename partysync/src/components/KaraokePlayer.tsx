@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import YouTube from "react-youtube";
 import type { PlaybackState } from "../shared/protocol";
 import type { PartySocket } from "../socket";
-import { GuestFollower, HostPublisher, type SyncPlayer } from "../sync/playback";
+import { GuestFollower, HostPublisher, SYNC_POLL_MS, type SyncPlayer } from "../sync/playback";
 
 type Props = {
   videoId: string;
@@ -38,6 +38,7 @@ export default function KaraokePlayer(props: Props) {
     const host = isHost ? new HostPublisher({
       player,
       playback: latest.current.playback,
+      serverNow: () => latest.current.clockOffset === null ? null : Date.now() + latest.current.clockOffset,
       send: (update) => socket.timeout(5000).emitWithAck("playback:update", update),
       onPlayback: (playback) => latest.current.onPlayback(playback),
       onStatus: setMessage,
@@ -63,7 +64,7 @@ export default function KaraokePlayer(props: Props) {
     const interval = window.setInterval(() => {
       try { host?.poll(); guest?.sync(); }
       catch { setMessage("Waiting for the video player…"); }
-    }, 500);
+    }, SYNC_POLL_MS);
     return () => {
       window.clearInterval(interval);
       host?.dispose();
