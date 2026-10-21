@@ -135,3 +135,29 @@ test("400 ms of host uplink delay does not leave a late guest behind", async ({ 
     }).toBeLessThan(0.2);
   } finally { await hostContext.close(); await guestContext.close(); }
 });
+
+test("a mobile player with slow seeks plays continuously instead of repeatedly catching up", async ({ browser, baseURL }) => {
+  const hostContext = await browser.newContext({ baseURL });
+  const guestContext = await browser.newContext({ baseURL, viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await hostContext.addInitScript(installMockYouTube);
+  await guestContext.addInitScript(installMockYouTube);
+  const host = await hostContext.newPage();
+  const guest = await guestContext.newPage();
+  try {
+    const code = await createParty(host);
+    await host.evaluate(() => { window.mockYouTube.seekTo(60, true); window.mockYouTube.playVideo(); });
+    await expect(host.getByText("Host controls are live. Everyone follows your player.")).toBeVisible();
+    await joinParty(guest, code);
+    await guest.evaluate(() => { window.mockYouTube.seekLatencyMs = 900; });
+    await guest.getByRole("button", { name: "Join & Start" }).click();
+    await expect.poll(() => guest.evaluate(() => window.mockYouTube.getPlayerState())).toBe(1);
+    const startingPosition = await guest.evaluate(() => window.mockYouTube.getCurrentTime());
+    // Observe a playback window long enough for the old two-second seek loop to repeat.
+    await guest.waitForTimeout(8000);
+    expect(await guest.evaluate(() => window.mockYouTube.seekCount)).toBeLessThanOrEqual(2);
+    expect(await guest.evaluate(() => window.mockYouTube.getPlayerState())).toBe(1);
+    expect(await guest.evaluate(() => window.mockYouTube.getCurrentTime())).toBeGreaterThan(startingPosition + 6);
+    await host.evaluate(() => window.mockYouTube.pauseVideo());
+    await expect(guest.getByText("Paused by the host.")).toBeVisible();
+  } finally { await hostContext.close(); await guestContext.close(); }
+});

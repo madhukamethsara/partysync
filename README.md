@@ -88,10 +88,13 @@ positions are shared at least every second while the player is active. Host
 samples include their capture time in the synchronized server clock so the
 backend can compensate for host-to-server travel time during playback.
 
-Automatic corrections tolerate 0.35 seconds of playing drift (0.1 when paused)
-and use a 2-second seek cooldown to avoid repeated buffering. Players are checked
-every 250 ms. Host control
-changes and manual synchronization can bypass the cooldown. Playback still
+Automatic corrections tolerate 0.75 seconds of playing drift (0.25 when paused).
+Playing drift must persist for 1.5 seconds, automatic catch-up seeks are spaced
+at least 10 seconds apart, and buffering gets a 3-second recovery period.
+If an automatic correction still leaves the guest behind after recovery, further
+automatic seeks stop to keep the phone playing smoothly; **Sync now** can retry.
+Players are checked every 250 ms. Host controls and manual synchronization still
+apply immediately. Playback still
 depends on YouTube availability, ads, buffering, and browser playback permissions;
 frame-exact synchronization is not guaranteed. The host extension is milestone 3.
 
