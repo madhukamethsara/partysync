@@ -1,8 +1,8 @@
 # Shared playback protocol (milestone 1)
 
-The server stores one authoritative playback snapshot per room. This milestone
-provides the protocol; observing the host player and controlling guest players
-belong to milestone 2 (website) and milestone 3 (YouTube extension).
+The server stores one authoritative playback snapshot per room. Milestone 1
+provides the protocol; milestone 2 connects the website's host and guest players.
+The YouTube host extension is milestone 3.
 
 ## Shared types
 
@@ -112,7 +112,34 @@ expectedPosition = playback.position + (playback.playing
 
 This assumes roughly symmetric network delay. Consumers should collect several
 samples, prefer samples with low round-trip time, and refresh after reconnecting.
-The website does not yet sample the clock or apply playback snapshots.
+The website collects five samples on connection, keeps the lowest round-trip
+estimate in each batch, and refreshes every 30 seconds or on **Sync now**.
+
+## Website consumers (milestone 2)
+
+The host observes player state and rate changes immediately. A 500 ms poll
+detects seeks (including paused seeks) and shares a heartbeat at least every
+two seconds once playback has started. Buffering publishes a non-playing sample
+so guest timelines do not keep advancing while the host waits. Updates are
+serialized; changes during an in-flight acknowledgement are coalesced into a
+fresh sample. Sequence conflicts adopt the returned snapshot and subsequent
+polls send fresh samples. A delayed reply after disposal cannot update the room.
+
+Guests explicitly tap **Join & Start** after the player and clock are ready.
+Guest corrections do not publish host events. Guests estimate the position from
+the server clock and host speed, clamp it to known video duration, follow
+play/pause and supported playback rates, and correct drift over 0.6 seconds when
+playing or 0.15 seconds when paused. Automatic seeks use a 2.5-second cooldown;
+new host control changes and explicit **Sync now** can bypass it. Buffering
+guests wait for recovery before attempting automatic drift corrections.
+
+Blocked autoplay disables following until another user click. Video changes
+create a new player and require another **Join & Start**. Selecting the same
+song resets the host player and returns following guests to zero, paused. Player
+errors display a message; listeners, polling, and pending publishers are cleaned
+up on song changes or leaving. Older room snapshots cannot overwrite a newer
+playback revision. The YouTube API is documented at
+https://developers.google.com/youtube/iframe_api_reference.
 
 ## Existing lifecycle
 

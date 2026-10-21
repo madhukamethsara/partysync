@@ -1,11 +1,9 @@
 
 import { useEffect, useState, type FormEvent } from "react";
-import { io, type Socket } from "socket.io-client";
-import type {
-  ClientToServerEvents,
-  ServerToClientEvents,
-  Room,
-} from "./shared/protocol";
+import type { PlaybackState, Room } from "./shared/protocol";
+import { socket } from "./socket";
+import { useServerClock } from "./hooks/useServerClock";
+import { applyPlayback, mergeRoom } from "./utils/playback";
 import "./App.css";
 import KaraokePlayer from "./components/KaraokePlayer";
 import { extractYoutubeId } from "./utils/youtube";
@@ -14,16 +12,6 @@ type ConnectionStatus =
   | "connecting"
   | "connected"
   | "disconnected";
-
-const backendUrl = import.meta.env.VITE_BACKEND_URL || (
-  import.meta.env.PROD
-    ? "https://partysync.onrender.com"
-    : "http://localhost:3001"
-);
-
-const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(backendUrl, {
-  autoConnect: false,
-});
 
 function App() {
   const [status, setStatus] =
@@ -37,6 +25,12 @@ function App() {
   const [notice, setNotice] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [loading, setLoading] = useState(false);
+  const [playerVersion, setPlayerVersion] = useState(0);
+  const { offsetMs, refresh: refreshClock } = useServerClock(socket);
+
+  function onPlayback(playback: PlaybackState) {
+    setRoom((current) => applyPlayback(current, playback));
+  }
 
   useEffect(() => {
     function onConnect() {
@@ -59,7 +53,11 @@ function App() {
     }
 
     function onRoomUpdated(updatedRoom: Room) {
-      setRoom(updatedRoom);
+      setRoom((current) => mergeRoom(current, updatedRoom));
+    }
+
+    function onPlaybackUpdated(playback: PlaybackState) {
+      setRoom((current) => applyPlayback(current, playback));
     }
 
     function onRoomClosed(data: { message: string }) {
@@ -72,6 +70,7 @@ function App() {
     socket.on("disconnect", onDisconnect);
     socket.on("connect_error", onConnectError);
     socket.on("room:updated", onRoomUpdated);
+    socket.on("playback:updated", onPlaybackUpdated);
     socket.on("room:closed", onRoomClosed);
 
     socket.connect();
@@ -81,6 +80,7 @@ function App() {
       socket.off("disconnect", onDisconnect);
       socket.off("connect_error", onConnectError);
       socket.off("room:updated", onRoomUpdated);
+      socket.off("playback:updated", onPlaybackUpdated);
       socket.off("room:closed", onRoomClosed);
       socket.disconnect();
     };
@@ -155,6 +155,7 @@ async function handleChangeSong(
     }
 
     setVideoUrl("");
+    if (room?.videoId === videoId) setPlayerVersion((version) => version + 1);
     setNotice("New karaoke song shared!");
   } catch {
     setError("Failed to update the song.");
@@ -387,7 +388,17 @@ async function handleChangeSong(
             )}
 
             {room.videoId ? (
-              <KaraokePlayer videoId={room.videoId} />
+              <KaraokePlayer
+                key={`${room.code}:${room.videoId}:${playerVersion}`}
+                videoId={room.videoId}
+                playback={room.playback}
+                isHost={isHost}
+                canPublish={!loading}
+                socket={socket}
+                clockOffset={offsetMs}
+                refreshClock={refreshClock}
+                onPlayback={onPlayback}
+              />
             ) : (
               <p className="muted">
                 {isHost ? "Share a YouTube karaoke song to get started." : "Waiting for the host to choose a song."}
