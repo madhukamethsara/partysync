@@ -186,6 +186,27 @@ button:disabled {
   border-radius: 10px;
 }
 
+.playback-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.playback-status,
+.playback-controls .muted {
+  flex-basis: 100%;
+  margin: 4px 0;
+  line-height: 1.5;
+}
+
+.playback-status {
+  color: #c4b5fd;
+  font-size: 14px;
+}
+
 .participants h3 {
   margin-bottom: 15px;
 }

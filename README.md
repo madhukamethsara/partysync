@@ -70,15 +70,27 @@ Rooms are stored in memory. Keep the backend at one instance; restarting or
 redeploying clears rooms. Free Render services can sleep, so the initial
 connection can take longer while the service wakes up.
 
-## Playback foundation
+## Website playback synchronization
 
 Rooms now include timestamped playback snapshots, host-only playback updates,
 sequence validation, and a clock synchronization endpoint. Shared TypeScript
 event definitions live in `partysync/src/shared/protocol.ts`.
 
 See [the playback protocol](docs/playback-protocol.md) for event payloads,
-late-join timing, and clock offset calculations. Website playback synchronization
-and the YouTube host extension are subsequent milestones.
+late-join timing, and clock offset calculations.
+
+Hosts control the embedded YouTube player normally. Guests join the room and
+tap **Join & Start** to follow the host's current position, play/pause, seeks,
+and playback speed. **Sync now** forces a position correction and refreshes the
+clock estimate. Guests must tap **Join & Start** again if their browser blocks
+playback or a new song loads. Clock estimates refresh every 30 seconds; host
+positions are shared at least every two seconds while the player is active.
+
+Automatic corrections tolerate 0.6 seconds of playing drift (0.15 when paused)
+and use a 2.5-second seek cooldown to avoid repeated buffering. Host control
+changes and manual synchronization can bypass the cooldown. Playback still
+depends on YouTube availability, ads, buffering, and browser playback permissions;
+frame-exact synchronization is not guaranteed. The host extension is milestone 3.
 
 After installing both apps' dependencies, run these checks from the repository root:
 
@@ -87,4 +99,23 @@ npm test
 npm run check:server
 npm run build
 npm run lint
+npm --prefix partysync run check:tests
 ```
+
+`npm test` runs backend integration tests and deterministic frontend timing and
+player-controller tests. Browser tests use the real website and backend with a
+simulated YouTube IFrame API so they do not depend on ads or network media:
+
+```sh
+cd partysync
+npx playwright install chromium
+npm run test:e2e
+```
+
+Alternatively set `PLAYWRIGHT_CHANNEL=chrome` to use installed Google Chrome.
+The browser suite starts isolated servers on ports 5178 and 3008 and checks a
+mobile-sized guest, clock differences, late joining, controls, song changes,
+blocked playback, buffering, and unavailable videos. For live YouTube verification,
+use two browser profiles and a phone: play a karaoke video, join midway, seek
+while playing and paused, change speed, switch songs, and confirm the guest can
+resume using **Join & Start** after a playback restriction.

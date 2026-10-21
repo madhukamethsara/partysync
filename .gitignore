@@ -4,3 +4,5 @@ dist/
 .env.*
 !.env.example
 .repo-backups/
+playwright-report/
+test-results/
