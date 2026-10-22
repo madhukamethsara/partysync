@@ -1,0 +1,22 @@
+{
+  "name": "partysync-youtube-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "tsc --noEmit",
+    "test": "node --test test/*.test.ts",
+    "test:e2e": "npm run build && playwright test"
+  },
+  "dependencies": {
+    "socket.io-client": "^4.8.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@types/chrome": "^0.3.6",
+    "@types/node": "^24.13.3",
+    "esbuild": "^0.28.2",
+    "typescript": "~6.0.2"
+  }
+}

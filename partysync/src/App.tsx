@@ -3,7 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import type { PlaybackState, Room } from "./shared/protocol";
 import { socket } from "./socket";
 import { useServerClock } from "./hooks/useServerClock";
-import { applyPlayback, mergeRoom } from "./utils/playback";
+import { applyPlayback, inviteRoomCode, mergeRoom } from "./utils/playback";
 import "./App.css";
 import KaraokePlayer from "./components/KaraokePlayer";
 import { extractYoutubeId } from "./utils/youtube";
@@ -18,7 +18,7 @@ function App() {
     useState<ConnectionStatus>("connecting");
 
   const [name, setName] = useState("");
-  const [joinCode, setJoinCode] = useState("");
+  const [joinCode, setJoinCode] = useState(() => inviteRoomCode(window.location.search));
   const [room, setRoom] = useState<Room | null>(null);
 
   const [error, setError] = useState("");

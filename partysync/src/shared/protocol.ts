@@ -1,4 +1,4 @@
-/** Shared wire contract for the website, backend, and future host extension. */
+/** Shared wire contract for the website, backend, and YouTube host extension. */
 export type Participant = {
   id: string;
   name: string;

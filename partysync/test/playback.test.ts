@@ -3,11 +3,18 @@ import test from "node:test";
 import { setImmediate } from "node:timers/promises";
 import type { PlaybackResponse, PlaybackState, PlaybackUpdate, Room } from "../src/shared/protocol.ts";
 import { GuestFollower, HostPublisher, type SyncPlayer } from "../src/sync/playback.ts";
-import { applyPlayback, clockSample, expectedPosition, mergeRoom } from "../src/utils/playback.ts";
+import { applyPlayback, clockSample, expectedPosition, inviteRoomCode, mergeRoom } from "../src/utils/playback.ts";
 
 const snapshot = (changes: Partial<PlaybackState> = {}): PlaybackState => ({
   videoId: "dQw4w9WgXcQ", position: 20, playing: true,
   playbackRate: 1, updatedAt: 10000, sequence: 1, ...changes,
+});
+
+test("invite links prefill valid room codes and ignore malformed input", () => {
+  assert.equal(inviteRoomCode("?room=abc123"), "ABC123");
+  assert.equal(inviteRoomCode("?room=NOT-A-CODE"), "");
+  assert.equal(inviteRoomCode("?room=%3Cscript%3E"), "");
+  assert.equal(inviteRoomCode(""), "");
 });
 
 class Player implements SyncPlayer {

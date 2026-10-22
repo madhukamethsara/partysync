@@ -31,3 +31,8 @@ export function mergeRoom(current: Room | null, incoming: Room): Room {
   }
   return { ...incoming, videoId: current.videoId, playback: current.playback };
 }
+
+export function inviteRoomCode(search: string): string {
+  const code = new URLSearchParams(search).get("room")?.trim().toUpperCase() ?? "";
+  return /^[A-F0-9]{6}$/.test(code) ? code : "";
+}

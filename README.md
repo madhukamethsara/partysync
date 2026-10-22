@@ -13,6 +13,10 @@ server/             Backend (Render service root)
   .env.example
   server.js
   package.json
+extension/          YouTube host extension (Chrome Manifest V3)
+  src/
+  manifest.json
+  README.md
 render.yaml         Render Blueprint
 package.json        Convenience commands for local development
 ```
@@ -24,6 +28,7 @@ Use Node.js 24. Install each app's dependencies from the repository root:
 ```sh
 npm ci --prefix partysync
 npm ci --prefix server
+npm ci --prefix extension
 ```
 
 Run `npm run dev:server` and `npm run dev:client` in separate terminals.
@@ -96,13 +101,34 @@ automatic seeks stop to keep the phone playing smoothly; **Sync now** can retry.
 Players are checked every 250 ms. Host controls and manual synchronization still
 apply immediately. Playback still
 depends on YouTube availability, ads, buffering, and browser playback permissions;
-frame-exact synchronization is not guaranteed. The host extension is milestone 3.
+frame-exact synchronization is not guaranteed.
+
+## YouTube host extension (milestone 3)
+
+Hosts can now create a party directly on desktop YouTube. The extension adds a
+**Host with PartySync** button, shares the native player's time and controls, and
+provides an invite link and room code. Guests join through the existing website
+on their phone or computer; only the host needs the extension.
+
+```sh
+npm run build:extension
+```
+
+Open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**,
+and select `extension/dist`. Refresh an open YouTube watch page to see the button.
+The default invite website is `https://partysync-seven.vercel.app`, and the backend
+is `https://partysync.onrender.com`. Both are editable in extension settings.
+
+See [extension installation and testing](extension/README.md) for the full flow,
+permissions, supported pages, and current limitations. Deploy the updated frontend
+for invite links to prefill the room code; guests can also enter the code manually.
+The extension uses the existing playback backend without new server changes.
 
 The delay reduction needs both the frontend and backend deployed from the latest
 code. Older clients remain supported; clients without a synchronized capture
 time use receipt-time playback snapshots.
 
-After installing both apps' dependencies, run these checks from the repository root:
+After installing all three packages' dependencies, run these checks from the repository root:
 
 ```sh
 npm test
@@ -110,10 +136,12 @@ npm run check:server
 npm run build
 npm run lint
 npm --prefix partysync run check:tests
+npm run check:extension
+npm run build:extension
 ```
 
-`npm test` runs backend integration tests and deterministic frontend timing and
-player-controller tests. Browser tests use the real website and backend with a
+`npm test` runs backend integration tests, frontend timing and player-controller
+tests, and extension configuration and session tests. Browser tests use the real website and backend with a
 simulated YouTube IFrame API so they do not depend on ads or network media:
 
 ```sh
