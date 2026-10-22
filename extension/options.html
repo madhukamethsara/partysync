@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PartySync extension settings</title>
+  <style>
+    body{font:16px/1.6 Arial,sans-serif;background:#09090f;color:#eee;max-width:640px;margin:60px auto;padding:24px}
+    h1{color:#c4b5fd}form{display:grid;gap:12px}input,button{font:inherit;padding:12px;border-radius:8px}
+    input{background:#181824;color:#fff;border:1px solid #635279}button{background:#8b5cf6;color:#fff;border:0;cursor:pointer}
+    p{color:#c9c1d4}small{color:#b7adc7}input:focus-visible,button:focus-visible{outline:2px solid #c4b5fd;outline-offset:3px}
+  </style>
+</head>
+<body>
+  <h1>PartySync extension settings</h1>
+  <p>Choose where guests join and which PartySync server hosts your rooms.</p>
+  <form id="settings-form">
+    <label for="frontend">PartySync website URL</label>
+    <input id="frontend" type="url" required placeholder="https://your-site.vercel.app">
+    <small>Invite links will open this website.</small>
+    <label for="backend">PartySync backend URL</label>
+    <input id="backend" type="url" required placeholder="https://partysync.onrender.com">
+    <small>Use the backend origin without /api or /socket.io. Changing it may ask for access to that server.</small>
+    <button type="submit">Save settings</button>
+  </form>
+  <p id="status" role="status"></p>
+  <p>Open a YouTube watch page and click <strong>Host with PartySync</strong>. Guests can join from a phone without installing the extension.</p>
+  <script src="options.js"></script>
+</body>
+</html>

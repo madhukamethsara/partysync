@@ -6,8 +6,12 @@
     "dev:server": "npm --prefix server run dev",
     "build": "npm --prefix partysync run build",
     "lint": "npm --prefix partysync run lint",
-    "test": "npm --prefix server test && npm --prefix partysync test",
+    "test": "npm --prefix server test && npm --prefix partysync test && npm --prefix extension test",
     "test:e2e": "npm --prefix partysync run test:e2e",
+    "build:extension": "npm --prefix extension run build",
+    "check:extension": "npm --prefix extension run check",
+    "test:extension": "npm --prefix extension test",
+    "test:extension:e2e": "npm --prefix extension run test:e2e",
     "check:server": "node partysync/node_modules/typescript/bin/tsc -p server/tsconfig.json"
   }
 }

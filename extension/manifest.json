@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "PartySync for YouTube",
+  "version": "0.1.0",
+  "description": "Host a PartySync room directly from YouTube and invite friends to follow on the web.",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage"],
+  "host_permissions": ["https://partysync.onrender.com/*"],
+  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "background": { "service_worker": "worker.js", "type": "module" },
+  "content_scripts": [{
+    "matches": ["https://www.youtube.com/*"],
+    "js": ["content.js"],
+    "run_at": "document_idle"
+  }],
+  "action": { "default_title": "PartySync settings" },
+  "options_ui": { "page": "options.html", "open_in_tab": true },
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'self'" }
+}

@@ -1,15 +1,15 @@
-# Shared playback protocol (milestone 1)
+# Shared playback protocol
 
 The server stores one authoritative playback snapshot per room. Milestone 1
 provides the protocol; milestone 2 connects the website's host and guest players.
-The YouTube host extension is milestone 3.
+Milestone 3 adds a desktop YouTube host extension using the same protocol.
 
 ## Shared types
 
 `partysync/src/shared/protocol.ts` defines the room, playback, acknowledgement,
 and Socket.IO event types. The website imports these types and the JavaScript
-backend references them through JSDoc. The future extension should import the
-same types using a type-only import. Keeping the source within the frontend
+backend references them through JSDoc. The extension imports the same types
+using type-only imports and reuses the website's host publisher. Keeping the source within the frontend
 also preserves the existing Vercel project root; server references are erased
 and add no runtime dependency on frontend files.
 
@@ -158,9 +158,39 @@ up on song changes or leaving. Older room snapshots cannot overwrite a newer
 playback revision. The YouTube API is documented at
 https://developers.google.com/youtube/iframe_api_reference.
 
+## Extension host (milestone 3)
+
+The content script observes the native YouTube video element on `/watch` pages.
+It sends timestamped samples through a tab-scoped Chrome runtime port, on player
+events and every 250 ms. It follows YouTube navigation and replaces media event
+listeners when YouTube replaces the video element. The extension does not control
+the host's player or copy caption text: karaoke lyrics embedded in the video
+follow its playback time.
+
+The service worker owns a WebSocket-only Socket.IO connection to the existing
+backend. It creates the room, selects the current video, and feeds samples to the
+shared `HostPublisher`, preserving serialized updates, heartbeat timing, and
+sequence recovery. Sample timestamps include the worker's estimated server clock
+offset. It takes three clock samples when connecting, prefers the lowest round
+trip, and repeats every 20 seconds. This also supplies WebSocket traffic needed
+to keep an active Chrome 116+ extension service worker alive while paused.
+
+Detected ads pause the guest timeline at the previous video's projected content
+position; the ad's own timestamp is never published as the song position. A
+missing player, navigation, and host buffering pause guests until samples resume.
+Ad detection depends on YouTube's page structure and needs live verification.
+
+Only the default backend is granted network access on installation. Custom HTTPS
+backends or local development servers require an explicit permission grant in
+the settings page. The content script runs on `www.youtube.com`; settings are
+stored locally. Invite links target the configured frontend with `?room=CODE`,
+which prefills the website's join form. Guests still enter their name and tap
+**Join Party**, then **Join & Start**.
+
 ## Existing lifecycle
 
 Rooms remain in memory on a single backend instance. Host disconnects still
 close the room immediately. Reconnection tokens and a grace period are planned
-for milestone 4. No extension origin permissions or extension files are added
-in this milestone.
+for milestone 4. Closing or fully reloading the extension's host tab, ending the
+party, or losing its connection ends the room. YouTube's navigation within the
+same page keeps the session. Each host tab owns a separate room and connection.

@@ -6,3 +6,4 @@ dist/
 .repo-backups/
 playwright-report/
 test-results/
+extension/*.zip
