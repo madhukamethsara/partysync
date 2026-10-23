@@ -389,7 +389,7 @@ async function handleChangeSong(
 
             {room.videoId ? (
               <KaraokePlayer
-                key={`${room.code}:${room.videoId}:${playerVersion}`}
+                key={isHost ? `${room.code}:host:${room.videoId}:${playerVersion}` : `${room.code}:guest`}
                 videoId={room.videoId}
                 playback={room.playback}
                 isHost={isHost}

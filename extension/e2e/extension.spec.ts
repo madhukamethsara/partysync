@@ -59,8 +59,10 @@ test("an installed extension hosts YouTube, shares controls with a mobile guest,
     const host = await context.newPage();
     await host.route("https://www.youtube.com/**", (route) => route.fulfill({
       contentType: "text/html", body: `<html><body><ytd-watch-flexy video-id="dQw4w9WgXcQ">
-      <div id="movie_player"><video class="html5-main-video"></video></div>
-      <ytd-watch-metadata><div id="title">Test karaoke video</div></ytd-watch-metadata>
+      <div id="primary"><div id="movie_player"><video class="html5-main-video"></video></div>
+      <div id="below"><ytd-watch-metadata><div id="title">Test karaoke video</div>
+      <div id="description">Video details</div></ytd-watch-metadata>
+      <div id="related">Recommended videos</div></div></div>
       </ytd-watch-flexy></body></html>`,
     }));
     const cdp = await context.newCDPSession(host);
@@ -72,6 +74,8 @@ test("an installed extension hosts YouTube, shares controls with a mobile guest,
     await cdp.send("Runtime.enable");
     await host.goto("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
     await expect(host.getByRole("button", { name: "Host with PartySync" })).toBeVisible();
+    await expect(host.locator("ytd-watch-metadata + #partysync-extension-root")).toBeVisible();
+    await expect(host.locator("#partysync-extension-root + #related")).toBeVisible();
     await expect.poll(() => world).toBeGreaterThan(0);
     await inWorld(cdp, world, `(${simulateNativeVideo.toString()})()`);
     await host.getByRole("button", { name: "Host with PartySync" }).click();
@@ -90,6 +94,10 @@ test("an installed extension hosts YouTube, shares controls with a mobile guest,
     await guest.getByLabel("Your Name").fill("Mobile Guest");
     await guest.getByRole("button", { name: "Join Party" }).click();
     await guest.getByRole("button", { name: "Join & Start" }).click();
+    const guestIframe = await guest.locator("iframe").elementHandle();
+    const guestPlayer = await guest.evaluateHandle(() => window.mockYouTube);
+    const errors: string[] = [];
+    guest.on("pageerror", (error) => errors.push(error.message));
     await expect.poll(() => guest.evaluate(() => window.mockYouTube.getCurrentTime())).toBeGreaterThan(60);
     await expect(host.locator("#members")).toHaveText("2 members in the party");
 
@@ -114,11 +122,22 @@ test("an installed extension hosts YouTube, shares controls with a mobile guest,
       const replacement = document.createElement("video");
       replacement.className = "html5-main-video";
       document.querySelector("video")!.replaceWith(replacement);
+      const metadata = document.createElement("ytd-watch-metadata");
+      metadata.innerHTML = '<div id="title">Next song</div><div id="description">New video details</div>';
+      document.querySelector("ytd-watch-metadata")!.replaceWith(metadata);
       document.dispatchEvent(new Event("yt-navigate-finish"));
     });
     await inWorld(cdp, world, `(${simulateNativeVideo.toString()})()`);
     await expect.poll(() => guest.evaluate(() => window.mockYouTube.videoId)).toBe("aqz-KE-bpKQ");
+    await expect(guest.getByText("Following the host.")).toBeVisible();
+    await expect.poll(() => guest.evaluate(() => window.mockYouTube.getCurrentTime())).toBeGreaterThanOrEqual(60);
+    await expect(guest.getByRole("button", { name: "Join & Start" })).toHaveCount(0);
+    expect(await guest.evaluate((iframe) => document.querySelector("iframe") === iframe, guestIframe)).toBe(true);
+    expect(await guest.evaluate((player) => window.mockYouTube === player, guestPlayer)).toBe(true);
+    expect(errors).toEqual([]);
     expect(await host.locator("#partysync-extension-root").count()).toBe(1);
+    await expect(host.locator("ytd-watch-metadata + #partysync-extension-root")).toBeVisible();
+    await expect(host.locator("#partysync-extension-root + #related")).toBeVisible();
     await host.getByRole("button", { name: /^PartySync ·/ }).click();
     await host.getByRole("button", { name: "End party" }).click();
     await expect(guest.getByText("The host ended the party.")).toBeVisible();

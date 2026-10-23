@@ -15,7 +15,7 @@ npm run build:extension
 1. Open `chrome://extensions` and enable **Developer mode**.
 2. Click **Load unpacked** and select the generated `extension/dist` folder.
 3. Open or refresh a normal `https://www.youtube.com/watch?v=...` video page.
-4. Click **Host with PartySync** near the video title, enter your name, and click
+4. Click **Host with PartySync** immediately below the video details, enter your name, and click
    **Start party**. If the page layout has changed, the button appears at the
    bottom right instead.
 5. Copy the invite link to friends. Guests enter a name, tap **Join Party**, then
@@ -64,8 +64,9 @@ root README, run `npm run dev:server` and `npm run dev:client`, then save
 - Detected host ads pause guests without publishing the ad's timeline. Host
   buffering or a missing player also pauses guests. YouTube page changes may
   require updating the adapter; ad detection is best effort.
-- Guests may see their own YouTube ads or playback restrictions. They must tap
-  **Join & Start** when requested, including after a song change. Seek latency,
+- Guests continue following song changes in the same player. They may see their
+  own YouTube ads or playback restrictions and must tap **Join & Start** again
+  when their browser blocks playback. Seek latency,
   buffering, and network differences prevent guaranteed frame-exact playback.
 - Closing or fully reloading the host tab, reloading the extension, losing the
   backend connection, or restarting the backend ends the room. Reconnection and

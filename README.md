@@ -87,8 +87,9 @@ late-join timing, and clock offset calculations.
 Hosts control the embedded YouTube player normally. Guests join the room and
 tap **Join & Start** to follow the host's current position, play/pause, seeks,
 and playback speed. **Sync now** forces a position correction and refreshes the
-clock estimate. Guests must tap **Join & Start** again if their browser blocks
-playback or a new song loads. Clock estimates refresh every 30 seconds; host
+clock estimate. Guests keep the same player and continue following when the host
+changes songs. They must tap **Join & Start** again if their browser blocks
+playback. Clock estimates refresh every 30 seconds; host
 positions are shared at least every second while the player is active. Host
 samples include their capture time in the synchronized server clock so the
 backend can compensate for host-to-server travel time during playback.

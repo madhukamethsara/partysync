@@ -130,6 +130,7 @@ export class HostPublisher {
 type GuestOptions = {
   player: SyncPlayer;
   getPlayback: () => PlaybackState;
+  getVideoId?: () => string | null;
   serverNow: () => number | null;
   onStatus: (message: string) => void;
   onNeedsStart: (needed: boolean) => void;
@@ -194,7 +195,29 @@ export class GuestFollower {
     const { player } = this.options;
     const playback = this.options.getPlayback();
     const previous = this.previousPlayback;
-    const newHostState = previous && playback.sequence > previous.sequence;
+    const songChanged = previous !== null && playback.videoId !== previous.videoId;
+    const state = player.getPlayerState();
+    // Cueing is asynchronous. Never seek or play the old song using the new
+    // song's timeline, or count its loading time as an autoplay failure.
+    if ((this.options.getVideoId && this.options.getVideoId() !== playback.videoId)
+      || (songChanged && (state === -1 || state === 3))) {
+      this.playAttemptAt = null;
+      this.options.onStatus("Loading the host's next song…");
+      return;
+    }
+    if (songChanged) {
+      this.lastSeekAt = -Infinity;
+      this.playAttemptAt = null;
+      this.requestedRate = null;
+      this.lastRateAttemptAt = -Infinity;
+      this.buffering = false;
+      this.recoveryUntil = 0;
+      this.driftSince = null;
+      this.automaticSeekPending = false;
+      this.automaticSeekSuspended = false;
+      force = true;
+    }
+    const newHostState = previous && !songChanged && playback.sequence > previous.sequence;
     const hostSeek = newHostState
       && Math.abs(expectedPosition(previous, playback.updatedAt) - playback.position) > HOST_SEEK_JUMP_SECONDS;
     const hostControlChanged = newHostState && (
@@ -202,7 +225,6 @@ export class GuestFollower {
     );
     this.previousPlayback = playback;
     const now = (this.options.now ?? Date.now)();
-    const state = player.getPlayerState();
     const duration = player.getDuration();
     const target = expectedPosition(playback, serverNow, duration);
     const atEnd = duration > 0 && target >= duration;

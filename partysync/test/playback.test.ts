@@ -41,7 +41,7 @@ class Player implements SyncPlayer {
   removeEventListener() {}
 }
 
-function guestFixture(initial = snapshot()) {
+function guestFixture(initial = snapshot(), getVideoId?: () => string | null) {
   const player = new Player();
   let playback = initial;
   let time = 12000;
@@ -49,7 +49,7 @@ function guestFixture(initial = snapshot()) {
   let needsStart = true;
   let status = "";
   const follower = new GuestFollower({
-    player, getPlayback: () => playback,
+    player, getPlayback: () => playback, getVideoId,
     serverNow: () => clockReady ? time : null,
     now: () => time, onStatus: (value) => { status = value; },
     onNeedsStart: (value) => { needsStart = value; },
@@ -63,6 +63,37 @@ function guestFixture(initial = snapshot()) {
     get status() { return status; },
   };
 }
+
+test("following survives song changes and waits for the new media before applying its timeline", () => {
+  let loadedId = "dQw4w9WgXcQ";
+  const f = guestFixture(snapshot(), () => loadedId);
+  f.follower.start();
+  const oldPosition = f.player.position;
+  const oldPlays = f.player.plays;
+  const oldSeeks = f.player.seeks.length;
+  f.setPlayback(snapshot({ videoId: "aqz-KE-bpKQ", position: 90, playbackRate: 1.5, updatedAt: 20000, sequence: 2 }));
+  f.setTime(20000);
+  f.follower.sync();
+  assert.match(f.status, /Loading the host's next song/);
+  f.setTime(25000);
+  f.follower.sync();
+  assert.equal(f.needsStart, false, "Loading a song must not lose the guest's playback consent");
+  assert.equal(f.player.plays, oldPlays);
+  assert.equal(f.player.seeks.length, oldSeeks);
+  assert.equal(f.player.position, oldPosition, "The new timeline must not seek the old media");
+  loadedId = "aqz-KE-bpKQ";
+  f.player.state = 3;
+  f.follower.sync();
+  assert.equal(f.player.seeks.length, oldSeeks, "Wait for the new player to finish loading");
+  f.player.state = 5;
+  f.player.position = 0;
+  f.follower.sync();
+  assert.equal(f.player.position, 97.5);
+  assert.equal(f.player.rate, 1.5);
+  assert.equal(f.player.state, 1);
+  assert.equal(f.player.plays, oldPlays + 1);
+  assert.equal(f.needsStart, false);
+});
 
 test("clock samples account for skew and server processing time, and reject invalid replies", () => {
   const reply = { success: true as const, clientSentAt: 1000, serverReceivedAt: 1120, serverSentAt: 1130 };

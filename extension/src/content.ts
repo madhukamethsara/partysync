@@ -117,9 +117,21 @@ function install() {
   function mount() {
     const watch = watchVideoId(location.href) !== null;
     root.hidden = !watch && view.phase === "idle";
-    const anchor = watch ? document.querySelector("ytd-watch-metadata #top-row, ytd-watch-metadata #title, #below") : null;
-    if (anchor && root.parentElement !== anchor) { anchor.append(root); root.removeAttribute("data-floating"); }
-    else if (!anchor) {
+    const watchPage = watch ? document.querySelector("ytd-watch-flexy:not([hidden])") : null;
+    const details = watchPage?.querySelector("ytd-watch-metadata")
+      ?? watchPage?.querySelector("#primary #meta, #primary #info");
+    const below = watchPage?.querySelector("#primary #below, #below");
+    if (details?.parentElement) {
+      // Keep a dedicated sibling after the full details block, before comments
+      // and recommendations. Never append to the entire #below section.
+      if (root.previousElementSibling !== details) details.after(root);
+      root.removeAttribute("data-floating");
+    } else if (below) {
+      // YouTube can replace metadata during navigation. Stay above the rest of
+      // the section until the details block is available again.
+      if (below.firstElementChild !== root) below.prepend(root);
+      root.removeAttribute("data-floating");
+    } else {
       root.setAttribute("data-floating", "");
       if (root.parentElement !== document.body) document.body.append(root);
     }
