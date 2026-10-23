@@ -3,6 +3,7 @@ import YouTube from "react-youtube";
 import type { PlaybackState } from "../shared/protocol";
 import type { PartySocket } from "../socket";
 import { GuestFollower, HostPublisher, SYNC_POLL_MS, type SyncPlayer } from "../sync/playback";
+import { extractYoutubeId } from "../utils/youtube";
 
 type Props = {
   videoId: string;
@@ -15,9 +16,18 @@ type Props = {
   onPlayback: (playback: PlaybackState) => void;
 };
 
+type YouTubePlayer = SyncPlayer & {
+  cueVideoById(options: { videoId: string; startSeconds: number }): void;
+  getVideoUrl(): string;
+};
+
 export default function KaraokePlayer(props: Props) {
   const { videoId, isHost, canPublish, socket, clockOffset, refreshClock } = props;
-  const [player, setPlayer] = useState<SyncPlayer | null>(null);
+  const [player, setPlayer] = useState<YouTubePlayer | null>(null);
+  // react-youtube recreates the iframe whenever its videoId prop changes. Keep
+  // that prop stable and cue subsequent songs through the existing native API.
+  const [initialVideoId] = useState(videoId);
+  const cuedVideoId = useRef(videoId);
   const [message, setMessage] = useState("Loading YouTube player…");
   const [needsStart, setNeedsStart] = useState(true);
   const [playerError, setPlayerError] = useState("");
@@ -46,6 +56,7 @@ export default function KaraokePlayer(props: Props) {
     const guest = !isHost ? new GuestFollower({
       player,
       getPlayback: () => latest.current.playback,
+      getVideoId: () => extractYoutubeId(player.getVideoUrl()),
       serverNow: () => latest.current.clockOffset === null ? null : Date.now() + latest.current.clockOffset,
       onStatus: setMessage,
       onNeedsStart: setNeedsStart,
@@ -75,7 +86,15 @@ export default function KaraokePlayer(props: Props) {
       player.removeEventListener("onPlaybackRateChange", stateChanged);
       player.removeEventListener("onAutoplayBlocked", blocked);
     };
-  }, [player, playerError, isHost, canPublish, socket, videoId]);
+  }, [player, playerError, isHost, canPublish, socket]);
+
+  useEffect(() => {
+    if (!player || cuedVideoId.current === videoId) return;
+    cuedVideoId.current = videoId;
+    setPlayerError("");
+    setMessage("Loading the host's next song…");
+    player.cueVideoById({ videoId, startSeconds: 0 });
+  }, [player, videoId]);
 
   useEffect(() => {
     publisher.current?.accept(props.playback);
@@ -95,16 +114,17 @@ export default function KaraokePlayer(props: Props) {
   return (
     <section aria-label="Party playback">
       <YouTube
-        videoId={videoId}
+        videoId={initialVideoId}
         className="karaoke-player"
         iframeClassName="karaoke-frame"
         title="Shared karaoke song"
         opts={opts}
         onReady={(event) => {
           setMessage(isHost ? "Use the video controls to lead the party." : "Tap Join & Start to follow the host.");
-          setPlayer(event.target as SyncPlayer);
+          setPlayer(event.target as YouTubePlayer);
         }}
         onError={(event) => {
+          setNeedsStart(true);
           const unavailable = [100, 101, 150, 153].includes(event.data);
           setPlayerError(unavailable
             ? "YouTube cannot play this video here. Ask the host to choose another song."

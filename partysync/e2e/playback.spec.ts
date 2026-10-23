@@ -66,11 +66,66 @@ test("a mobile guest with clock skew joins late and follows play, pause, seeks, 
     await host.getByLabel("YouTube karaoke URL").fill("https://www.youtube.com/watch?v=aqz-KE-bpKQ");
     await host.getByRole("button", { name: "Share Song" }).click();
     await expect.poll(() => guest.evaluate(() => window.mockYouTube.videoId)).toBe("aqz-KE-bpKQ");
-    await expect(guest.getByRole("button", { name: "Join & Start" })).toBeEnabled();
+    await expect(guest.getByRole("button", { name: "Join & Start" })).toHaveCount(0);
     await host.getByRole("button", { name: "End Party" }).click();
     await expect(guest.getByText("The host ended the party.")).toBeVisible();
     expect(errors).toEqual([]);
   } finally { await hostContext.close(); await guestContext.close(); }
+});
+
+test("song changes preserve the guest iframe and recover from blocked or unavailable songs", async ({ browser, baseURL }) => {
+  const context = await browser.newContext({ baseURL });
+  await context.addInitScript(installMockYouTube);
+  const host = await context.newPage();
+  const guest = await context.newPage();
+  const errors: string[] = [];
+  guest.on("pageerror", (error) => errors.push(error.message));
+  try {
+    const code = await createParty(host);
+    await host.evaluate(() => window.mockYouTube.playVideo());
+    await joinParty(guest, code);
+    await guest.getByRole("button", { name: "Join & Start" }).click();
+    await expect(guest.getByText("Following the host.")).toBeVisible();
+    const originalIframe = await guest.locator("iframe").elementHandle();
+    const originalPlayer = await guest.evaluateHandle(() => window.mockYouTube);
+    let navigations = 0;
+    guest.on("framenavigated", (frame) => { if (frame === guest.mainFrame()) navigations++; });
+    // Delayed cueing exposes attempts to apply a new timeline to the old video.
+    await guest.evaluate(() => { window.mockYouTube.cueDelayMs = 700; });
+    await host.getByLabel("YouTube karaoke URL").fill("https://www.youtube.com/watch?v=aqz-KE-bpKQ");
+    await host.getByRole("button", { name: "Share Song" }).click();
+    await expect.poll(() => guest.evaluate(() => window.mockYouTube.videoId)).toBe("aqz-KE-bpKQ");
+    await expect(guest.getByText("Paused by the host.")).toBeVisible();
+    await host.evaluate(() => { window.mockYouTube.seekTo(70, true); window.mockYouTube.playVideo(); });
+    await expect(guest.getByText("Following the host.")).toBeVisible();
+    await expect.poll(() => guest.evaluate(() => window.mockYouTube.getCurrentTime())).toBeGreaterThanOrEqual(70);
+    expect(await guest.evaluate((iframe) => document.querySelector("iframe") === iframe, originalIframe)).toBe(true);
+    expect(await guest.evaluate((player) => window.mockYouTube === player, originalPlayer)).toBe(true);
+    expect(navigations).toBe(0);
+    await expect(guest.getByRole("button", { name: "Join & Start" })).toHaveCount(0);
+
+    await guest.evaluate(() => { window.mockYouTube.blockPlayback = true; });
+    await host.getByLabel("YouTube karaoke URL").fill("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+    await host.getByRole("button", { name: "Share Song" }).click();
+    await expect.poll(() => guest.evaluate(() => window.mockYouTube.videoId)).toBe("dQw4w9WgXcQ");
+    await host.evaluate(() => window.mockYouTube.playVideo());
+    await expect(guest.getByText("Your browser paused playback. Tap Join & Start to continue.")).toBeVisible();
+    await guest.evaluate(() => { window.mockYouTube.blockPlayback = false; });
+    await guest.getByRole("button", { name: "Join & Start" }).click();
+    await expect(guest.getByText("Following the host.")).toBeVisible();
+
+    await guest.evaluate(() => window.mockYouTube.error(150));
+    await expect(guest.getByRole("alert")).toContainText("YouTube cannot play this video here.");
+    await host.getByLabel("YouTube karaoke URL").fill("https://www.youtube.com/watch?v=aqz-KE-bpKQ");
+    await host.getByRole("button", { name: "Share Song" }).click();
+    await expect.poll(() => guest.evaluate(() => window.mockYouTube.videoId)).toBe("aqz-KE-bpKQ");
+    await expect(guest.getByRole("alert")).toHaveCount(0);
+    await guest.getByRole("button", { name: "Join & Start" }).click();
+    await host.evaluate(() => window.mockYouTube.playVideo());
+    await expect(guest.getByText("Following the host.")).toBeVisible();
+    expect(await guest.evaluate((iframe) => document.querySelector("iframe") === iframe, originalIframe)).toBe(true);
+    expect(errors).toEqual([]);
+  } finally { await context.close(); }
 });
 
 test("blocked playback can be retried, buffering recovers, and unavailable videos show an error", async ({ browser, baseURL }) => {

@@ -5,6 +5,9 @@ interface TestPlayer extends SyncPlayer {
   blockPlayback: boolean;
   seekLatencyMs: number;
   seekCount: number;
+  cueDelayMs: number;
+  cueVideoById(options: { videoId: string; startSeconds: number }): void;
+  getVideoUrl(): string;
   error(code: number): void;
   buffer(): void;
 }
@@ -22,19 +25,23 @@ export function installMockYouTube() {
     blockPlayback = false;
     seekLatencyMs = 0;
     seekCount = 0;
+    cueDelayMs = 0;
     private state = 5;
     private position = 0;
     private rate = 1;
     private sampledAt = performance.now();
     private iframe: HTMLIFrameElement;
+    private placeholder: HTMLElement;
     private events: Record<string, Listener>;
     private listeners = new Map<string, Set<Listener>>();
     private seekTimer: ReturnType<typeof setTimeout> | null = null;
+    private cueTimer: ReturnType<typeof setTimeout> | null = null;
     private seekResumeState = 1;
 
     constructor(element: HTMLElement, options: { videoId: string; events: Record<string, Listener> }) {
       this.videoId = options.videoId;
       this.events = options.events;
+      this.placeholder = element;
       this.iframe = document.createElement("iframe");
       element.replaceWith(this.iframe);
       window.mockYouTube = this;
@@ -60,6 +67,21 @@ export function installMockYouTube() {
     getDuration() { return 300; }
     getAvailablePlaybackRates() { return [0.5, 1, 1.5, 2]; }
     getIframe() { return this.iframe; }
+    getVideoUrl() { return `https://www.youtube.com/watch?v=${this.videoId}`; }
+    cueVideoById(options: { videoId: string; startSeconds: number }) {
+      if (this.cueTimer !== null) clearTimeout(this.cueTimer);
+      if (this.seekTimer !== null) clearTimeout(this.seekTimer);
+      this.seekTimer = null;
+      this.setState(3);
+      this.cueTimer = setTimeout(() => {
+        this.cueTimer = null;
+        this.videoId = options.videoId;
+        this.position = options.startSeconds;
+        this.sampledAt = performance.now();
+        this.rate = 1;
+        this.setState(5);
+      }, this.cueDelayMs);
+    }
     playVideo() {
       if (this.blockPlayback) { this.emit("onAutoplayBlocked", 0); return; }
       if (this.seekTimer !== null) { this.seekResumeState = 1; return; }
@@ -97,7 +119,8 @@ export function installMockYouTube() {
     error(code: number) { this.emit("onError", code); }
     destroy() {
       if (this.seekTimer !== null) clearTimeout(this.seekTimer);
-      this.listeners.clear(); this.iframe.remove();
+      if (this.cueTimer !== null) clearTimeout(this.cueTimer);
+      this.listeners.clear(); this.iframe.replaceWith(this.placeholder);
     }
   }
   Object.assign(window, { YT: { Player: MockPlayer } });

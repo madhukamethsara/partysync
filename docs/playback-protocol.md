@@ -150,12 +150,18 @@ players entering an endless seek/buffer loop. The guest sees a message suggestin
 suspension. Host control events remain active throughout. This trades a small
 residual offset for continuous playback on devices with slow media seeks.
 
-Blocked autoplay disables following until another user click. Video changes
-create a new player and require another **Join & Start**. Selecting the same
-song resets the host player and returns following guests to zero, paused. Player
-errors display a message; listeners, polling, and pending publishers are cleaned
-up on song changes or leaving. Older room snapshots cannot overwrite a newer
-playback revision. The YouTube API is documented at
+Blocked autoplay disables following until another user click. Guests keep the
+same iframe and follower when the host changes videos. The native API cues the
+next video; its reported URL must match the new snapshot before the follower
+applies its timeline. Loading is not treated as an autoplay failure. Once ready,
+the follower resets its seek/rate recovery state and resumes at the host's
+current time, preserving the guest's earlier choice to follow. A browser block
+still shows **Join & Start**. Selecting the same song resets the host player and
+returns following guests to zero, paused. Player errors display a message;
+selecting a different song clears the error and restores the guest controls.
+Listeners, polling, and pending publishers are cleaned up when replaced or
+leaving. Older room snapshots cannot overwrite a newer playback revision.
+The YouTube API is documented at
 https://developers.google.com/youtube/iframe_api_reference.
 
 ## Extension host (milestone 3)

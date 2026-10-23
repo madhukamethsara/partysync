@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PartySync for YouTube",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Host a PartySync room directly from YouTube and invite friends to follow on the web.",
   "minimum_chrome_version": "116",
   "permissions": ["storage"],
