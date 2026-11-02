@@ -75,6 +75,10 @@ Rooms are stored in memory. Keep the backend at one instance; restarting or
 redeploying clears rooms. Free Render services can sleep, so the initial
 connection can take longer while the service wakes up.
 
+Inside a room, use **Copy Invite Link** to invite friends with the room code
+already filled in, or **Copy Room Code** to share it separately. The invite link
+is also shown in a selectable field for browsers that block clipboard access.
+
 ## Website playback synchronization
 
 Rooms now include timestamped playback snapshots, host-only playback updates,
