@@ -221,6 +221,20 @@ async function handleChangeSong(
   const isHost =
     room !== null && room.hostId === socket.id;
 
+  const inviteUrl = new URL(window.location.pathname, window.location.origin);
+  if (room) inviteUrl.searchParams.set("room", room.code);
+
+  async function copyInvite(value: string, label: string) {
+    setError("");
+    setNotice("");
+    try {
+      await navigator.clipboard.writeText(value);
+      setNotice(`${label} copied!`);
+    } catch {
+      setError("Could not copy. Select and copy the invite link below, or share the room code.");
+    }
+  }
+
   return (
     <main className="app">
       <div className="container">
@@ -347,21 +361,29 @@ async function handleChangeSong(
               {room.code}
             </div>
 
-            <button
-              className="copy-btn"
-              onClick={() =>
-                navigator.clipboard
-                  .writeText(room.code)
-                  .then(() =>
-                    setNotice("Room code copied!")
-                  )
-                  .catch(() =>
-                    setError("Could not copy room code.")
-                  )
-              }
-            >
-              Copy Room Code
-            </button>
+            <div className="invite-actions">
+              <button
+                onClick={() => void copyInvite(inviteUrl.href, "Invite link")}
+              >
+                Copy Invite Link
+              </button>
+              <button
+                className="copy-btn"
+                onClick={() => void copyInvite(room.code, "Room code")}
+              >
+                Copy Room Code
+              </button>
+            </div>
+            <div className="invite-link">
+              <label htmlFor="invite-link">Invite link</label>
+              <input
+                id="invite-link"
+                type="text"
+                readOnly
+                value={inviteUrl.href}
+                onFocus={(event) => event.currentTarget.select()}
+              />
+            </div>
 
             {notice && (
               <p className="muted" role="status">

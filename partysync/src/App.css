@@ -160,6 +160,25 @@ button:disabled {
   background: #35354a;
 }
 
+.invite-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.invite-link {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+  text-align: left;
+}
+
+.invite-link label {
+  color: #bbb;
+  font-size: 14px;
+}
+
 .participants {
   margin-top: 35px;
   text-align: left;
