@@ -10,6 +10,10 @@ const HOST_SEEK_JUMP_SECONDS = 1.5;
 const AUTOMATIC_SEEK_COOLDOWN_MS = 10000;
 const DRIFT_SETTLE_MS = 1500;
 const BUFFER_RECOVERY_MS = 3000;
+const RATE_DRIFT_SECONDS = 0.3;
+const RATE_ALIGNED_SECONDS = 0.1;
+const MAX_RATE_DRIFT_SECONDS = 1.5;
+const MAX_RATE_ADJUSTMENT = 0.25;
 
 /** The synchronous IFrame API object supplied by YouTube's onReady event. */
 export interface SyncPlayer {
@@ -152,6 +156,7 @@ export class GuestFollower {
   private driftSince: number | null = null;
   private automaticSeekPending = false;
   private automaticSeekSuspended = false;
+  private correctingRate = false;
 
   constructor(options: GuestOptions) { this.options = options; }
   dispose() { this.disposed = true; this.enabled = false; }
@@ -244,22 +249,40 @@ export class GuestFollower {
       this.driftSince = null;
     }
 
-    const rateSupported = player.getAvailablePlaybackRates().includes(playback.playbackRate);
-    if (rateSupported && player.getPlaybackRate() !== playback.playbackRate
-      && (this.requestedRate !== playback.playbackRate || now - this.lastRateAttemptAt >= 1500)) {
-      this.requestedRate = playback.playbackRate;
-      this.lastRateAttemptAt = now;
-      player.setPlaybackRate(playback.playbackRate);
-    }
-    const drift = Math.abs(player.getCurrentTime() - target);
+    const error = target - player.getCurrentTime();
+    const drift = Math.abs(error);
     const settled = state !== 3 && now >= this.recoveryUntil;
+    const rates = player.getAvailablePlaybackRates();
+    const rateSupported = rates.includes(playback.playbackRate);
+    let desiredRate = playback.playbackRate;
+    // Close small gaps without a seek's buffering delay. Use only advertised
+    // speeds and restore the host speed near alignment or on any host control.
+    if (rateSupported && playing && state === 1 && settled
+      && !force && !hostSeek && !hostControlChanged
+      && drift > (this.correctingRate ? RATE_ALIGNED_SECONDS : RATE_DRIFT_SECONDS)
+      && drift <= MAX_RATE_DRIFT_SECONDS) {
+      const candidates = rates.filter((rate) => Number.isFinite(rate)
+        && (rate - playback.playbackRate) * error > 0
+        && Math.abs(rate - playback.playbackRate) <= MAX_RATE_ADJUSTMENT);
+      desiredRate = candidates.sort((a, b) => Math.abs(a - playback.playbackRate)
+        - Math.abs(b - playback.playbackRate))[0] ?? playback.playbackRate;
+    }
+    this.correctingRate = desiredRate !== playback.playbackRate;
+    if (rateSupported && player.getPlaybackRate() !== desiredRate
+      && (this.requestedRate !== desiredRate || now - this.lastRateAttemptAt >= 1500)) {
+      this.requestedRate = desiredRate;
+      this.lastRateAttemptAt = now;
+      player.setPlaybackRate(desiredRate);
+    }
+    // If a player ignores the speed command, retain the seek fallback.
+    const rateCorrecting = this.correctingRate && player.getPlaybackRate() === desiredRate;
     // Seeking itself may cost more playback time than it recovers on a phone.
     // Assess the result once it settles; stop automatic retries if it did not help.
     if (this.automaticSeekPending && settled) {
       this.automaticSeekPending = false;
       if (drift > GUEST_DRIFT_SECONDS) this.automaticSeekSuspended = true;
     }
-    if (playing && settled && drift > GUEST_DRIFT_SECONDS && !this.automaticSeekSuspended) {
+    if (playing && settled && drift > GUEST_DRIFT_SECONDS && !this.automaticSeekSuspended && !rateCorrecting) {
       this.driftSince ??= now;
     } else this.driftSince = null;
     const automaticSeek = this.driftSince !== null && now - this.driftSince >= DRIFT_SETTLE_MS
@@ -280,6 +303,7 @@ export class GuestFollower {
       if (state === 1) {
         this.playAttemptAt = null;
         this.options.onStatus(!rateSupported ? "Your player does not support the host’s playback speed."
+          : rateCorrecting ? "Aligning playback with the host."
           : this.automaticSeekSuspended ? "Playing without repeated jumps. Tap Sync now to realign."
           : "Following the host.");
       } else if (state === 3) {
