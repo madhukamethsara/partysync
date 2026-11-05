@@ -98,7 +98,14 @@ positions are shared at least every second while the player is active. Host
 samples include their capture time in the synchronized server clock so the
 backend can compensate for host-to-server travel time during playback.
 
-Automatic corrections tolerate 0.75 seconds of playing drift (0.25 when paused).
+On players with suitable playback speeds, steady playing drift above 0.3 seconds
+is corrected by temporarily speeding up or slowing down by at most 0.25x.
+The host's speed is restored within 0.1 seconds of alignment. This closes small
+device timing gaps without triggering another buffering seek. Rate correction
+waits for buffering recovery and yields immediately to host controls or **Sync now**.
+Players without a suitable speed retain the seek fallback described below.
+
+Automatic seek corrections tolerate 0.75 seconds of playing drift (0.25 when paused).
 Playing drift must persist for 1.5 seconds, automatic catch-up seeks are spaced
 at least 10 seconds apart, and buffering gets a 3-second recovery period.
 If an automatic correction still leaves the guest behind after recovery, further

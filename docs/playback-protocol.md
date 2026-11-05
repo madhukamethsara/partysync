@@ -143,6 +143,16 @@ jump over 1.5 seconds is treated as a seek; normal heartbeat jitter no longer
 bypasses the automatic correction safeguards. Play/pause, rate changes, and
 explicit **Sync now** still apply immediately.
 
+After recovery, playing guests with 0.3 to 1.5 seconds of drift temporarily use
+the nearest advertised speed toward the host, at most 0.25x away from the host's
+speed. They restore the host speed within 0.1 seconds of alignment. The smaller
+exit threshold avoids toggling speeds around the entry threshold. Buffering,
+pauses, host seeks, host speed changes, and manual synchronization restore the
+host speed immediately. Automatic seeks are deferred while the player reports
+the corrective speed; unsupported or ignored rate changes retain the seek
+fallback. Rate correction can also recover residual drift after automatic seeks
+have been suspended. No host state or protocol payload changes are required.
+
 If an automatic seek fails to bring playing drift below the tolerance after
 recovery, further automatic catch-up seeks are suspended. This prevents slow
 players entering an endless seek/buffer loop. The guest sees a message suggesting

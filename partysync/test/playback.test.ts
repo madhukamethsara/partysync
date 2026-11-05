@@ -382,3 +382,78 @@ test("heartbeat timing jitter is not treated as repeated host seeking", () => {
   assert.equal(f.player.seeks.length, 1);
   assert.equal(f.player.state, 1);
 });
+
+test("supported speeds close subsecond gaps in either direction without extra seeks", () => {
+  for (const offset of [-0.9, 0.9]) {
+    const f = guestFixture();
+    f.player.availableRates = [0.75, 1, 1.25];
+    f.follower.start();
+    f.setTime(15000);
+    f.player.position = 25 + offset;
+    f.follower.sync();
+    assert.equal(f.player.rate, offset < 0 ? 1.25 : 0.75);
+    for (let time = 15250; time <= 20000; time += 250) {
+      f.player.position += 0.25 * f.player.rate;
+      f.setTime(time);
+      f.follower.sync();
+    }
+    assert.ok(Math.abs(f.player.position - 30) <= 0.1);
+    assert.equal(f.player.rate, 1, "Restore host speed after closing the gap");
+    assert.equal(f.player.seeks.length, 1, "No buffering seek during convergence");
+  }
+});
+
+test("rate correction restores host speed on buffering, pause, and manual synchronization", () => {
+  const f = guestFixture();
+  f.player.availableRates = [1, 1.25];
+  f.follower.start();
+  f.setTime(15000); f.player.position = 24.5; f.follower.sync();
+  assert.equal(f.player.rate, 1.25);
+  f.player.state = 3; f.follower.sync();
+  assert.equal(f.player.rate, 1);
+  f.player.state = 1; f.follower.sync();
+  f.setTime(18000); f.player.position = 27.5; f.follower.sync();
+  assert.equal(f.player.rate, 1.25);
+  f.setPlayback(snapshot({ playing: false, position: 27.5, updatedAt: 18000, sequence: 2 }));
+  f.follower.sync();
+  assert.equal(f.player.rate, 1);
+  assert.equal(f.player.state, 2);
+  f.setPlayback(snapshot({ updatedAt: 18000, position: 27.5, sequence: 3 }));
+  f.follower.sync();
+  f.setTime(21000); f.player.position = 30; f.follower.sync();
+  assert.equal(f.player.rate, 1.25);
+  f.follower.start();
+  assert.equal(f.player.rate, 1);
+  assert.equal(f.player.position, 30.5);
+});
+
+test("ignored speed commands retain automatic seek recovery", () => {
+  const f = guestFixture();
+  f.player.availableRates = [1, 1.25];
+  f.player.setPlaybackRate = (rate) => { f.player.rates.push(rate); };
+  f.follower.start();
+  f.setTime(15000); f.player.position = 24; f.follower.sync();
+  f.setTime(22000); f.player.position = 31; f.follower.sync();
+  assert.equal(f.player.rate, 1);
+  assert.equal(f.player.seeks.length, 2);
+  assert.equal(f.player.position, 32);
+});
+
+test("a slow initial seek catches up at a non-default host speed without repeated buffering", () => {
+  const f = guestFixture(snapshot({ playbackRate: 1.5 }));
+  f.player.availableRates = [1.25, 1.5, 1.75];
+  f.player.seekTo = (position) => {
+    f.player.seeks.push(position); f.player.position = position; f.player.state = 3;
+  };
+  f.player.playVideo = () => { f.player.plays++; };
+  f.follower.start();
+  for (let time = 12250; time <= 26000; time += 250) {
+    if (time === 13000) f.player.state = 1;
+    else if (f.player.state === 1) f.player.position += 0.25 * f.player.rate;
+    f.setTime(time); f.follower.sync();
+  }
+  assert.ok(Math.abs(f.player.position - 44) <= 0.1);
+  assert.equal(f.player.seeks.length, 1);
+  assert.equal(f.player.rate, 1.5);
+  assert.equal(f.player.state, 1);
+});
