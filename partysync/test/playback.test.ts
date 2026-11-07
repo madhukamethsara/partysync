@@ -439,6 +439,37 @@ test("ignored speed commands retain automatic seek recovery", () => {
   assert.equal(f.player.position, 32);
 });
 
+test("asynchronous speed changes get time to apply before a pending catch-up seek", () => {
+  const f = guestFixture();
+  f.follower.start();
+  f.setTime(22000); f.player.position = 31; f.follower.sync();
+  f.player.availableRates = [1, 1.25];
+  f.player.setPlaybackRate = (rate) => { f.player.rates.push(rate); };
+  f.setTime(23500); f.player.position = 32.5; f.follower.sync();
+  assert.deepEqual(f.player.rates, [1.25]);
+  assert.equal(f.player.seeks.length, 1, "Do not seek while the IFrame applies its speed command");
+  f.setTime(24500); f.player.position = 33.5; f.player.rate = 1.25; f.follower.sync();
+  assert.equal(f.player.seeks.length, 1);
+});
+
+test("accepted speed corrections that make no progress fall back to a bounded seek", () => {
+  const f = guestFixture();
+  f.player.availableRates = [1, 1.25];
+  f.follower.start();
+  for (let time = 17000; time <= 24000; time += 250) {
+    f.setTime(time);
+    // Some players report the requested speed while media still runs at 1x.
+    f.player.position = 20 + (time - 10000) / 1000 - 1;
+    f.follower.sync();
+  }
+  assert.equal(f.player.seeks.length, 2);
+  assert.equal(f.player.rate, 1, "Restore host speed before seeking");
+  assert.equal(f.player.rates.filter((rate) => rate === 1.25).length, 1);
+  f.follower.start();
+  f.setTime(28000); f.player.position = 37; f.follower.sync();
+  assert.equal(f.player.rate, 1.25, "Manual sync allows another speed correction attempt");
+});
+
 test("a slow initial seek catches up at a non-default host speed without repeated buffering", () => {
   const f = guestFixture(snapshot({ playbackRate: 1.5 }));
   f.player.availableRates = [1.25, 1.5, 1.75];

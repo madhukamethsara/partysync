@@ -14,6 +14,8 @@ const RATE_DRIFT_SECONDS = 0.3;
 const RATE_ALIGNED_SECONDS = 0.1;
 const MAX_RATE_DRIFT_SECONDS = 1.5;
 const MAX_RATE_ADJUSTMENT = 0.25;
+const RATE_APPLY_GRACE_MS = 1500;
+const RATE_PROGRESS_WINDOW_MS = 5000;
 
 /** The synchronous IFrame API object supplied by YouTube's onReady event. */
 export interface SyncPlayer {
@@ -157,6 +159,8 @@ export class GuestFollower {
   private automaticSeekPending = false;
   private automaticSeekSuspended = false;
   private correctingRate = false;
+  private rateProgress: { at: number; drift: number; rate: number } | null = null;
+  private rateCorrectionFailed = false;
 
   constructor(options: GuestOptions) { this.options = options; }
   dispose() { this.disposed = true; this.enabled = false; }
@@ -168,6 +172,8 @@ export class GuestFollower {
     this.automaticSeekPending = false;
     this.automaticSeekSuspended = false;
     this.driftSince = null;
+    this.rateProgress = null;
+    this.rateCorrectionFailed = false;
     this.options.onNeedsStart(false);
     this.sync(true);
   }
@@ -247,6 +253,8 @@ export class GuestFollower {
       this.automaticSeekPending = false;
       this.automaticSeekSuspended = false;
       this.driftSince = null;
+      this.rateProgress = null;
+      this.rateCorrectionFailed = false;
     }
 
     const error = target - player.getCurrentTime();
@@ -255,9 +263,16 @@ export class GuestFollower {
     const rates = player.getAvailablePlaybackRates();
     const rateSupported = rates.includes(playback.playbackRate);
     let desiredRate = playback.playbackRate;
+    if (this.rateProgress && settled && playing && state === 1
+      && now - this.rateProgress.at >= RATE_PROGRESS_WINDOW_MS) {
+      if (drift > RATE_ALIGNED_SECONDS && drift > this.rateProgress.drift - 0.1) {
+        this.rateCorrectionFailed = true;
+      }
+      this.rateProgress = null;
+    }
     // Close small gaps without a seek's buffering delay. Use only advertised
     // speeds and restore the host speed near alignment or on any host control.
-    if (rateSupported && playing && state === 1 && settled
+    if (rateSupported && !this.rateCorrectionFailed && playing && state === 1 && settled
       && !force && !hostSeek && !hostControlChanged
       && drift > (this.correctingRate ? RATE_ALIGNED_SECONDS : RATE_DRIFT_SECONDS)
       && drift <= MAX_RATE_DRIFT_SECONDS) {
@@ -268,25 +283,31 @@ export class GuestFollower {
         - Math.abs(b - playback.playbackRate))[0] ?? playback.playbackRate;
     }
     this.correctingRate = desiredRate !== playback.playbackRate;
+    if (!this.correctingRate) this.rateProgress = null;
+    else if (!this.rateProgress || this.rateProgress.rate !== desiredRate) {
+      this.rateProgress = { at: now, drift, rate: desiredRate };
+    }
     if (rateSupported && player.getPlaybackRate() !== desiredRate
       && (this.requestedRate !== desiredRate || now - this.lastRateAttemptAt >= 1500)) {
       this.requestedRate = desiredRate;
       this.lastRateAttemptAt = now;
       player.setPlaybackRate(desiredRate);
     }
-    // If a player ignores the speed command, retain the seek fallback.
-    const rateCorrecting = this.correctingRate && player.getPlaybackRate() === desiredRate;
+    // IFrame commands apply asynchronously. Give the first request time to
+    // settle, without extending the grace period on every retry.
+    const rateCorrecting = this.correctingRate && (player.getPlaybackRate() === desiredRate
+      || (this.rateProgress !== null && now - this.rateProgress.at < RATE_APPLY_GRACE_MS));
     // Seeking itself may cost more playback time than it recovers on a phone.
     // Assess the result once it settles; stop automatic retries if it did not help.
     if (this.automaticSeekPending && settled) {
       this.automaticSeekPending = false;
       if (drift > GUEST_DRIFT_SECONDS) this.automaticSeekSuspended = true;
     }
-    if (playing && settled && drift > GUEST_DRIFT_SECONDS && !this.automaticSeekSuspended && !rateCorrecting) {
+    if (playing && settled && drift > GUEST_DRIFT_SECONDS && !this.automaticSeekSuspended) {
       this.driftSince ??= now;
     } else this.driftSince = null;
     const automaticSeek = this.driftSince !== null && now - this.driftSince >= DRIFT_SETTLE_MS
-      && now - this.lastSeekAt >= AUTOMATIC_SEEK_COOLDOWN_MS;
+      && now - this.lastSeekAt >= AUTOMATIC_SEEK_COOLDOWN_MS && !rateCorrecting;
     const controlSeek = (hostSeek || hostControlChanged)
       && drift > (playing ? PLAYING_DRIFT_SECONDS : PAUSED_DRIFT_SECONDS);
     const pausedSeek = !playing && state !== 3 && drift > PAUSED_DRIFT_SECONDS
