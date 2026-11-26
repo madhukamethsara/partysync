@@ -2,13 +2,13 @@ import type { PlaybackResponse, PlaybackState, PlaybackUpdate } from "../shared/
 import { expectedPosition } from "../utils/playback.ts";
 
 export const SYNC_POLL_MS = 250;
-const HOST_HEARTBEAT_MS = 1000;
+const HOST_HEARTBEAT_MS = 500;
 const PLAYING_DRIFT_SECONDS = 0.35;
 const GUEST_DRIFT_SECONDS = 0.75;
 const PAUSED_DRIFT_SECONDS = 0.25;
 const HOST_SEEK_JUMP_SECONDS = 1.5;
 const AUTOMATIC_SEEK_COOLDOWN_MS = 10000;
-const DRIFT_SETTLE_MS = 1500;
+const DRIFT_SETTLE_MS = 750;
 const BUFFER_RECOVERY_MS = 3000;
 const RATE_DRIFT_SECONDS = 0.3;
 const RATE_ALIGNED_SECONDS = 0.1;
