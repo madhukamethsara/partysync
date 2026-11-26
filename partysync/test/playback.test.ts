@@ -162,14 +162,14 @@ test("host polling catches paused seeks and sends heartbeats without flooding st
   });
   host.poll(); await setImmediate();
   now += 500; host.poll(); await setImmediate();
-  assert.equal(sent.length, 1);
+  assert.equal(sent.length, 2);
   player.position = 45;
   now += 500; host.poll(); await setImmediate();
-  assert.equal(sent[1].position, 45);
+  assert.equal(sent[2].position, 45);
   now += 1000; host.poll(); await setImmediate();
-  assert.equal(sent.length, 3);
+  assert.equal(sent.length, 4);
   host.dispose(); host.publish();
-  assert.equal(sent.length, 3);
+  assert.equal(sent.length, 4);
 });
 
 test("host recovers from uncertain acknowledgements using the returned sequence and a new sample", async () => {

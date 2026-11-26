@@ -239,14 +239,16 @@ async function handleChangeSong(
     <main className="app">
       <div className="container">
         <header className="header">
-          <h1>🎤 PartySync</h1>
+          <p className="eyebrow">LIVE KARAOKE, TOGETHER</p>
+          <h1><span aria-hidden="true">🎤</span> PartySync</h1>
 
           <p className="subtitle">
             One Song. Many Screens. Everyone Sings.
           </p>
 
-          <div className={`status ${status}`}>
-            ● Backend {status}
+          <div className={`status ${status}`} role="status" aria-live="polite">
+            <span className="status-dot" aria-hidden="true" />
+            Backend {status}
           </div>
         </header>
 
@@ -302,8 +304,9 @@ async function handleChangeSong(
                     status !== "connected" ||
                     !name.trim()
                   }
+                  aria-busy={loading}
                 >
-                  Create Party
+                  {loading ? "Creating party..." : "Create Party"}
                 </button>
               </form>
 
@@ -339,8 +342,9 @@ async function handleChangeSong(
                     !name.trim() ||
                     !joinCode.trim()
                   }
+                  aria-busy={loading}
                 >
-                  Join Party
+                  {loading ? "Joining party..." : "Join Party"}
                 </button>
               </form>
             </div>
