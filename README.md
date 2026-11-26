@@ -103,15 +103,21 @@ is corrected by temporarily speeding up or slowing down by at most 0.25x.
 The host's speed is restored within 0.1 seconds of alignment. This closes small
 device timing gaps without triggering another buffering seek. Rate correction
 waits for buffering recovery and yields immediately to host controls or **Sync now**.
+Speed commands have a 1.5-second grace period to allow the YouTube IFrame to
+apply them asynchronously before seeking. If a correction does not reduce
+drift by at least 0.1 seconds over a 5-second observation window, the guest
+restores the host speed and uses the existing automatic seek recovery. Host
+controls and **Sync now** allow a fresh correction attempt.
 Players without a suitable speed retain the seek fallback described below.
 
 Automatic seek corrections tolerate 0.75 seconds of playing drift (0.25 when paused).
-Playing drift must persist for 1.5 seconds, automatic catch-up seeks are spaced
+Playing drift must persist for 750 ms, automatic catch-up seeks are spaced
 at least 10 seconds apart, and buffering gets a 3-second recovery period.
 If an automatic correction still leaves the guest behind after recovery, further
 automatic seeks stop to keep the phone playing smoothly; **Sync now** can retry.
-Players are checked every 250 ms. Host controls and manual synchronization still
-apply immediately. Playback still
+Players are checked every 250 ms. Host samples are shared at least every 500 ms,
+and guests can begin automatic drift correction after 750 ms. Host controls and
+manual synchronization still apply immediately. Playback still
 depends on YouTube availability, ads, buffering, and browser playback permissions;
 frame-exact synchronization is not guaranteed.
 
